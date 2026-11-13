@@ -215,7 +215,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .hero .label i svg { width: 15px; height: 15px; }
 .hero .value { font-size: 40px; font-weight: 700; letter-spacing: -0.035em; line-height: 1.1; margin: 14px 0 6px; }
 .hero.lead .value { font-size: 52px; }
-.hero .meta { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.hero .meta { display: flex; align-items: center; flex-wrap: wrap; white-space: nowrap; gap: 4px 8px; font-size: 12.5px; color: var(--muted); }
 .delta { display: inline-flex; align-items: center; gap: 3px; font-weight: 600; font-size: 12.5px; padding: 2px 7px; border-radius: 999px; }
 .delta.up { color: var(--good-text); background: color-mix(in srgb, var(--good) 14%, transparent); }
 .delta.down { color: var(--bad-text); background: color-mix(in srgb, var(--critical) 14%, transparent); }
@@ -412,3 +412,15 @@ details.queries summary { cursor: pointer; color: var(--text-2); margin: 6px 0 1
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; }
 }
+
+.split .none { background: var(--muted); opacity: .55; }
+.mini .split { margin: 8px 0 0; }
+.acc-new { text-transform: none; letter-spacing: 0; color: var(--good-text); font-weight: 600; margin-left: 4px; }
+.detect { margin-top: 20px; padding: 18px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border); }
+.detect h4 { margin: 0 0 10px; }
+.detect dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 0 12px; font-size: 13px; }
+.detect dt { color: var(--muted); }
+.detect dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; word-break: break-word; }
+.detect ul { margin: 0 0 12px; padding-left: 18px; color: var(--text-2); font-size: 13px; display: grid; gap: 4px; }
+.detect details { margin-top: 12px; }
+.detect details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin-bottom: 8px; }

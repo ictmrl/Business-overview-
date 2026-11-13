@@ -5,6 +5,7 @@
 //              SQL queries configured in Settings (each returns `value`, or
 //              `date`+`value` rows for history).
 import pg from 'pg';
+import { inspectSchema, detectMapping, schemaReport } from './schema.js';
 
 const num = (v, d = 0) => (v == null || v === '' || Number.isNaN(Number(v)) ? d : Number(v));
 // Optional number: a value that wasn't provided (or whose query failed) stays undefined
@@ -24,6 +25,8 @@ export function normalizeStats(raw = {}) {
   if (Object.keys(acc).length) out.accounts = {
     parents: opt(acc.parents ?? acc.families), students: opt(acc.students ?? acc.children),
     parentsNewToday: opt(acc.parentsNewToday), studentsNewToday: opt(acc.studentsNewToday),
+    parentsPaid: opt(acc.parentsPaid), parentsTrialing: opt(acc.parentsTrialing),
+    studentsPaid: opt(acc.studentsPaid), studentsTrialing: opt(acc.studentsTrialing),
   };
   if (Object.keys(a).length) out.active = { live: opt(a.live), today: opt(a.today ?? a.daily), week: opt(a.week ?? a.weekly), month: opt(a.month ?? a.monthly), history: hist(a.history) };
   if (Object.keys(u).length) out.usage = { sessionsToday: opt(u.sessionsToday), minutesToday: opt(u.minutesToday), avgSessionMinutes: opt(u.avgSessionMinutes), history: hist(u.history), byHour: Array.isArray(u.byHour) ? u.byHour.map((x) => num(typeof x === 'object' ? x.value : x)) : undefined };
@@ -68,7 +71,7 @@ async function fromPostgres(cfg) {
   const one = (k) => rows[k]?.[0]?.value;
   const byHour = rows.usageByHour ? Array.from({ length: 24 }, (_, h) => num(rows.usageByHour.find((r) => num(r.hour) === h)?.value)) : undefined;
   const raw = {
-    accounts: { parents: one('parentsTotal'), students: one('studentsTotal'), parentsNewToday: one('parentsNewToday'), studentsNewToday: one('studentsNewToday') },
+    accounts: { parents: one('parentsTotal'), students: one('studentsTotal'), parentsNewToday: one('parentsNewToday'), studentsNewToday: one('studentsNewToday'), parentsPaid: one('parentsPaid'), parentsTrialing: one('parentsTrialing'), studentsPaid: one('studentsPaid'), studentsTrialing: one('studentsTrialing') },
     subscribers: { total: one('subscribersTotal'), paid: one('subscribersPaid'), trialing: one('subscribersTrialing'), trialsEndingSoon: one('trialsEndingSoon'), newTrialsToday: one('subscribersNewTrialsToday'), newToday: one('subscribersNewToday'), history: rows.subscribersHistory },
     active: { today: one('activeToday'), week: one('activeWeek'), month: one('activeMonth'), history: rows.usageHistory },
     usage: { sessionsToday: byHour?.reduce((a, b) => a + b, 0), history: rows.usageHistory, byHour },
@@ -83,4 +86,11 @@ async function fromPostgres(cfg) {
 
 export async function fetchStats(cfg) {
   return cfg.mode === 'postgres' ? fromPostgres(cfg) : fromApi(cfg);
+}
+
+/** Inspect the database and propose queries (Settings → Business data → Detect). */
+export async function detectSchema(cfg) {
+  const info = await inspectSchema(getPool(cfg));
+  if (!Object.keys(info.tables).length) throw new Error('Connected, but found no tables in the public schema');
+  return { ...detectMapping(info), report: schemaReport(info) };
 }

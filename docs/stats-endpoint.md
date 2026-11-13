@@ -16,6 +16,10 @@ arrays are daily, oldest first, ideally the last 30 days.
   "accounts": {
     "parents": 1046,        // parent / account-holder users
     "students": 1515,       // child / student profiles
+    "parentsPaid": 912,     // parents with a paid plan
+    "parentsTrialing": 71,  // parents on a trial (and not paid)
+    "studentsPaid": 1404,   // students covered by a paid plan
+    "studentsTrialing": 97,
     "parentsNewToday": 4,
     "studentsNewToday": 6
   },
@@ -115,6 +119,18 @@ Keep the endpoint read-only and don't return personal data beyond what you
 want on screen.
 
 ## Or skip the endpoint: direct Postgres
+
+**Quickest route:** choose *Railway Postgres (direct SQL)*, paste the URL and
+press **Detect from database**. The dashboard reads your table and column
+names (plus the distinct values of role/status columns, no customer data),
+works out where parents, students, subscriptions and trials live, and offers
+generated queries for subscribers, trials, and parents/students by plan.
+It handles snake_case tables and Prisma-style `"User"` / `"createdAt"` names.
+The schema summary it shows is safe to share if you need help mapping the rest.
+
+Subscriber history needs a created-at column. If there isn't one (or the query
+fails), the chart uses the dashboard's own daily snapshots instead, starting
+from the day you connect.
 
 If Stripe is connected, any subscriber counts this endpoint leaves out
 (`paid`, `trialing`, `trialsEndingSoon`, `newTrialsToday`) are filled in from

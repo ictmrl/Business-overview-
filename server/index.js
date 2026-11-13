@@ -5,9 +5,9 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { authRouter, requireAuth } from './auth.js';
-import { getSettings, getPublicSettings, updateSection, DATA_DIR, SECRET_FIELDS } from './store.js';
+import { getSettings, getPublicSettings, updateSection, DATA_DIR, SECRET_FIELDS, getState, save } from './store.js';
 import { demoStats, demoInfra, demoMail } from './sources/demo.js';
-import { fetchStats, statsConfigured } from './sources/stats.js';
+import { fetchStats, statsConfigured, detectSchema } from './sources/stats.js';
 import { fetchRailway, railwayConfigured, testRailway } from './sources/railway.js';
 import { fetchStripe, resetStripeCache } from './sources/stripe.js';
 import { startUptime, uptimeSnapshot, checkAll, parseUrls } from './sources/uptime.js';
@@ -114,9 +114,34 @@ async function collect() {
   } else if (demo) { const l = demoMail.list(); out.inbox = { unread: l.filter((m) => !m.seen).length, latest: l.slice(0, 5) }; out.sources.email = sourceStatus('demo'); }
   else out.sources.email = sourceStatus('off');
 
+  recordDaily(out);
   snapshot = out;
   broadcast('snapshot', snapshot);
   return snapshot;
+}
+
+// Keep one snapshot per day of the headline counts (live data only), so trend
+// charts have history even when the database can't provide it.
+function recordDaily(out) {
+  const st = getState();
+  st.daily ||= {};
+  const today = new Date().toISOString().slice(0, 10);
+  if (out.sources.stats?.state === 'live' || out.sources.stripe?.state === 'live') {
+    const s = out.subscribers || {}, a = out.accounts || {};
+    const rec = { subscribers: s.total, paid: s.paid, trialing: s.trialing, parents: a.parents, students: a.students };
+    if (Object.values(rec).some((v) => v != null)) {
+      st.daily[today] = rec;
+      const keys = Object.keys(st.daily).sort();
+      for (const k of keys.slice(0, Math.max(0, keys.length - 400))) delete st.daily[k];
+      save();
+    }
+  }
+  // Fill in subscriber history from local snapshots when the source has none.
+  if (out.subscribers && !out.subscribers.history?.length && out.sources.stats?.state !== 'demo') {
+    out.subscribers.history = Object.entries(st.daily).sort(([x], [y]) => x.localeCompare(y))
+      .filter(([, v]) => v.subscribers != null).slice(-90).map(([date, v]) => ({ date, value: v.subscribers }));
+    out.subscribers.historySource = 'local';
+  }
 }
 
 let loop;
@@ -173,6 +198,13 @@ function merged(section, body) {
   }
   return out;
 }
+api.post('/settings/stats/detect', async (req, res) => {
+  try {
+    const cfg = merged('stats', req.body);
+    if (!cfg.databaseUrl) throw new Error('Enter the database URL first');
+    res.json({ ok: true, ...(await detectSchema(cfg)) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
 api.post('/settings/:section/test', async (req, res) => {
   const section = req.params.section;
   const cfg = merged(section, req.body);

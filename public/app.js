@@ -257,7 +257,7 @@ function demoBanner(snap) {
   const errs = Object.entries(snap.sources || {}).filter(([, s]) => s.state === 'error');
   if (errs.length) return `<div class="banner warn"><span class="status critical">Connection issue</span><span>${errs.map(([k, s]) => `<b>${esc(k)}</b>: ${esc(s.message)}`).join(' · ')}</span><a href="#settings" style="margin-left:auto">Fix in Settings →</a></div>`;
   const qe = Object.entries(snap.queryErrors || {});
-  if (qe.length) return `<div class="banner warn"><span class="status warning">${qe.length} ${qe.length === 1 ? 'query' : 'queries'} failed</span><span>These panels show “—” until the SQL matches your schema: ${qe.map(([k, v]) => `<b title="${esc(v)}">${esc(k)}</b>`).join(', ')}. <span class="muted">${esc(qe[0][1])}</span></span><a href="#settings" style="margin-left:auto;white-space:nowrap">Edit queries →</a></div>`;
+  if (qe.length) return `<div class="banner warn"><span class="status warning">${qe.length} ${qe.length === 1 ? 'query' : 'queries'} failed</span><span>These panels show “—” until the SQL matches your schema: ${qe.map(([k, v]) => `<b title="${esc(v)}">${esc(k)}</b>`).join(', ')}. <span class="muted">${esc(qe[0][1])}</span></span><a href="#settings/stats" style="margin-left:auto;white-space:nowrap">Detect / edit queries →</a></div>`;
   if (demo) return `<div class="banner"><span class="status demo">Demo data</span><span>Some panels are showing sample data. Connect Railway, your stats source and IMAP in <a href="#settings">Settings</a> to go live.</span></div>`;
   return '';
 }
@@ -265,18 +265,23 @@ function demoBanner(snap) {
 function drawSplit(box, s) {
   if (!box) return;
   if (!s || (s.paid == null && s.trialing == null)) { box.innerHTML = ''; return; }
-  const paid = s.paid || 0, trial = s.trialing || 0, tot = paid + trial || 1;
+  const paid = s.paid || 0, trial = s.trialing || 0;
+  const none = s.total != null && s.total > paid + trial ? s.total - paid - trial : 0;
+  const tot = paid + trial + none || 1;
   if (!box.querySelector('.split-bar')) {
-    box.innerHTML = `<div class="split-bar" role="img"><i class="paid"></i><i class="trial"></i></div>
-      <div class="split-legend"><span><i class="paid"></i><b class="sp-paid">—</b> paid</span><span><i class="trial"></i><b class="sp-trial">—</b> on trial</span><span class="muted sp-ending"></span></div>`;
+    box.innerHTML = `<div class="split-bar" role="img"><i class="paid"></i><i class="trial"></i><i class="none"></i></div>
+      <div class="split-legend"><span><i class="paid"></i><b class="sp-paid">—</b> paid</span><span><i class="trial"></i><b class="sp-trial">—</b> trial</span><span class="sp-none-wrap"><i class="none"></i><b class="sp-none">—</b> no plan</span><span class="muted sp-ending"></span></div>`;
   }
-  box.querySelector('.split-bar').setAttribute('aria-label', `${paid} paid, ${trial} on trial`);
+  box.querySelector('.split-bar').setAttribute('aria-label', `${paid} paid, ${trial} on trial${none ? `, ${none} with no plan` : ''}`);
+  box.querySelector('.sp-none-wrap').hidden = !none;
   requestAnimationFrame(() => {
     box.querySelector('.split-bar .paid').style.width = `${(paid / tot) * 100}%`;
     box.querySelector('.split-bar .trial').style.width = `${(trial / tot) * 100}%`;
+    box.querySelector('.split-bar .none').style.width = `${(none / tot) * 100}%`;
   });
   countUp(box.querySelector('.sp-paid'), s.paid);
   countUp(box.querySelector('.sp-trial'), s.trialing);
+  countUp(box.querySelector('.sp-none'), none);
   box.querySelector('.sp-ending').textContent = s.trialsEndingSoon ? `${int(s.trialsEndingSoon)} trials ending ≤3 days` : '';
 }
 
@@ -301,10 +306,11 @@ function renderOverview(el) {
       <button class="card hero" data-metric="uptime" style="--c:var(--series-4)"><div class="label"><i>${I.shield}</i>Uptime (24h)</div><div class="value" id="h-up">—</div><div class="meta" id="h-up-m"></div><div class="spark-wrap" id="h-up-s" style="padding:8px 20px 14px;height:auto"></div></button>
     </div>
     <div class="card" id="accounts-card">
-      <div class="card-head"><h3>Accounts</h3><span class="sub">who's signed up</span></div>
+      <div class="card-head"><h3>Accounts</h3><span class="sub">who's signed up, by plan</span></div>
+      <div class="banner" id="ac-hint" hidden style="margin-bottom:12px">Parent and student counts aren't coming through yet. In <a href="#settings/stats">Settings → Business data</a>, press <b>Detect from database</b> to map your tables automatically.</div>
       <div class="grid g-4" style="gap:12px">
-        <div class="mini"><div class="k">Parents</div><div class="v" id="ac-par">—</div><div class="muted acc-sub" id="ac-par-n"></div></div>
-        <div class="mini"><div class="k">Students</div><div class="v" id="ac-stu">—</div><div class="muted acc-sub" id="ac-stu-n"></div></div>
+        <div class="mini"><div class="k">Parents <span id="ac-par-n" class="acc-new"></span></div><div class="v" id="ac-par">—</div><div class="split" id="ac-par-split"></div></div>
+        <div class="mini"><div class="k">Students <span id="ac-stu-n" class="acc-new"></span></div><div class="v" id="ac-stu">—</div><div class="split" id="ac-stu-split"></div></div>
         <div class="mini"><div class="k">Students per parent</div><div class="v" id="ac-ratio">—</div><div class="muted acc-sub">average family size</div></div>
         <div class="mini"><div class="k">Subscriptions per parent</div><div class="v" id="ac-subs">—</div><div class="muted acc-sub" id="ac-subs-n"></div></div>
       </div>
@@ -373,7 +379,8 @@ function renderOverview(el) {
       revenue: { title: 'Revenue', sub: 'daily collected revenue', data: snap.revenue?.history, color: 'var(--series-7)', fmt: (v) => money(v, cur, 2), axis: (v) => money(v, cur).replace(/\.00$/, '') },
     }[metric];
     $('#main-title', el).textContent = cfg.title;
-    $('#main-sub', el).textContent = cfg.sub;
+    $('#main-sub', el).textContent = metric === 'subscribers' && snap.subscribers?.historySource === 'local'
+      ? `recorded daily by this dashboard · ${snap.subscribers.history.length} day${snap.subscribers.history.length === 1 ? '' : 's'} so far` : cfg.sub;
     const data = (cfg.data || []).slice(-range);
     const box = $('#main-chart', el);
     if (!data.length) { box.innerHTML = `<div class="empty">No history yet for ${esc(cfg.title.toLowerCase())}.</div>`; box.__chart = null; return; }
@@ -385,8 +392,12 @@ function renderOverview(el) {
     const ac = snap.accounts || {}, subs = snap.subscribers?.total;
     countUp($('#ac-par', el), ac.parents);
     countUp($('#ac-stu', el), ac.students);
-    $('#ac-par-n', el).textContent = ac.parentsNewToday != null ? `+${int(ac.parentsNewToday)} today` : '';
-    $('#ac-stu-n', el).textContent = ac.studentsNewToday != null ? `+${int(ac.studentsNewToday)} today` : '';
+    $('#ac-par-n', el).textContent = ac.parentsNewToday ? `+${int(ac.parentsNewToday)} today` : '';
+    $('#ac-stu-n', el).textContent = ac.studentsNewToday ? `+${int(ac.studentsNewToday)} today` : '';
+    drawSplit($('#ac-par-split', el), { paid: ac.parentsPaid, trialing: ac.parentsTrialing, total: ac.parents });
+    drawSplit($('#ac-stu-split', el), { paid: ac.studentsPaid, trialing: ac.studentsTrialing, total: ac.students });
+    const missing = ac.parents == null && ac.students == null;
+    $('#ac-hint', el).hidden = !missing || snap.sources?.stats?.state === 'demo';
     const ratio = ac.parents && ac.students != null ? ac.students / ac.parents : null;
     const perParent = ac.parents && subs != null ? subs / ac.parents : null;
     countUp($('#ac-ratio', el), ratio, (n) => n.toFixed(2));
@@ -407,7 +418,7 @@ function renderOverview(el) {
       sparkline($('#h-subs-s', el), (snap.subscribers?.history || []).map((d) => d.value), { color: 'var(--series-1)', animate: isInit });
       drawSplit($('#h-subs-split', el), snap.subscribers);
       countUp($('#h-act', el), snap.active?.today);
-      $('#h-act-m', el).innerHTML = deltaHtml(delta(snap.active?.history?.slice(0, -1)), 'yesterday vs 30d') + (snap.active?.live != null ? `<span>${delta(snap.active?.history?.slice(0, -1)) != null ? '· ' : ''}${int(snap.active.live)} online now</span>` : '');
+      $('#h-act-m', el).innerHTML = deltaHtml(delta(snap.active?.history?.slice(0, -1))) + (snap.active?.live != null ? `<span>${delta(snap.active?.history?.slice(0, -1)) != null ? '· ' : ''}${int(snap.active.live)} online now</span>` : '');
       sparkline($('#h-act-s', el), (snap.active?.history || []).map((d) => d.value), { color: 'var(--series-3)', animate: isInit });
       countUp($('#h-mrr', el), snap.revenue?.mrr, (n) => money(n, cur));
       $('#h-mrr-m', el).innerHTML = snap.revenue ? `<span>${money(snap.revenue.month, cur)} this month</span>` : '';
@@ -720,7 +731,7 @@ const SECTIONS = {
 };
 
 function renderSettings(el) {
-  let data = null, section = 'general';
+  let data = null, section = SECTIONS[location.hash.split('/')[1]] ? location.hash.split('/')[1] : 'general';
   el.innerHTML = `<div class="view"><div class="settings">
     <nav class="settings-nav" id="s-nav">${Object.entries(SECTIONS).map(([k, s]) => `<button data-s="${k}">${esc(s.title)}<span id="sn-${k}"></span></button>`).join('')}</nav>
     <div class="card" id="s-body"><div class="skeleton" style="height:200px"></div></div>
@@ -761,7 +772,8 @@ function renderSettings(el) {
     body.innerHTML = `<div class="card-head"><h3 style="font-size:17px">${esc(def.title)}</h3></div>
       <p class="section-desc">${esc(def.desc)}</p>
       <form id="s-form"><div class="form-grid">${def.fields.map(fieldHtml).join('')}</div>
-      <div class="form-actions"><button class="btn primary" type="submit">Save</button>${def.test ? '<button class="btn" type="button" id="s-test">Test connection</button>' : ''}<span class="form-msg" id="s-msg"></span></div></form>`;
+      <div class="form-actions"><button class="btn primary" type="submit">Save</button>${def.test ? '<button class="btn" type="button" id="s-test">Test connection</button>' : ''}${section === 'stats' && vals.mode === 'postgres' ? '<button class="btn" type="button" id="s-detect">Detect from database</button>' : ''}<span class="form-msg" id="s-msg"></span></div></form>
+      <div id="s-detect-out"></div>`;
     const collect = () => {
       const out = {};
       for (const f of def.fields) {
@@ -783,6 +795,30 @@ function renderSettings(el) {
       try { const r = await api(`/api/settings/${section}`, { method: 'PUT', body: collect() }); data.settings = r.settings; draw(); toast('Settings saved'); }
       catch (err) { msg.className = 'form-msg error-msg'; msg.textContent = err.message; }
     };
+    $('#s-detect', body)?.addEventListener('click', async () => {
+      const out = $('#s-detect-out', body);
+      msg.className = 'form-msg muted'; msg.textContent = 'Reading your database schema…';
+      try {
+        const r = await api('/api/settings/stats/detect', { body: collect() });
+        msg.textContent = '';
+        const m = r.mapping, n = Object.values(r.queries).filter(Boolean).length;
+        out.innerHTML = `<div class="detect">
+          <h4>What I found</h4>
+          <dl><dt>Parents</dt><dd>${esc(m.parents || 'not found')}</dd><dt>Students</dt><dd>${esc(m.students || 'not found')}</dd><dt>Subscriptions</dt><dd>${esc(m.subscriptions || 'not found')}</dd></dl>
+          <ul>${r.notes.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+          <div class="form-actions"><button class="btn primary" id="s-apply" ${n ? '' : 'disabled'}>Use these ${n} queries</button><span class="muted" style="font-size:12.5px">Saves them and refreshes the dashboard. Queries not listed here are left as they are.</span></div>
+          <details><summary>Schema summary (table and column names only — safe to share for help)</summary><textarea readonly rows="8">${esc(r.report)}</textarea></details>
+        </div>`;
+        $('#s-apply', out).onclick = async () => {
+          const merged = { ...data.settings.stats.queries, ...r.queries };
+          const res = await api('/api/settings/stats', { method: 'PUT', body: { ...collect(), queries: merged } });
+          data.settings = res.settings; await api('/api/refresh', { method: 'POST', body: {} }).then(setSnap).catch(() => {});
+          toast('Queries saved — dashboard refreshed'); draw();
+          const after = state.snap?.queryErrors ? Object.keys(state.snap.queryErrors) : [];
+          if (after.length) toast(`${after.length} queries still failing — see the banner on the overview`);
+        };
+      } catch (err) { msg.className = 'form-msg error-msg'; msg.textContent = '✕ ' + err.message; }
+    });
     $('#s-test', body)?.addEventListener('click', async () => {
       msg.className = 'form-msg muted'; msg.textContent = 'Testing…';
       try { const r = await api(`/api/settings/${section}/test`, { body: collect() }); msg.className = 'form-msg ok-msg'; msg.textContent = '✓ ' + r.message; }

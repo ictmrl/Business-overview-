@@ -69,6 +69,10 @@ export const DEFAULT_SETTINGS = {
       studentsTotal: "SELECT count(*)::int AS value FROM users WHERE role = 'student'",
       parentsNewToday: "SELECT count(*)::int AS value FROM users WHERE role = 'parent' AND created_at >= date_trunc('day', now())",
       studentsNewToday: "SELECT count(*)::int AS value FROM users WHERE role = 'student' AND created_at >= date_trunc('day', now())",
+      parentsPaid: "",
+      parentsTrialing: "",
+      studentsPaid: "",
+      studentsTrialing: "",
       activeToday: "SELECT count(DISTINCT user_id)::int AS value FROM sessions WHERE created_at >= date_trunc('day', now())",
       activeWeek: "SELECT count(DISTINCT user_id)::int AS value FROM sessions WHERE created_at >= now() - interval '7 days'",
       activeMonth: "SELECT count(DISTINCT user_id)::int AS value FROM sessions WHERE created_at >= now() - interval '30 days'",
@@ -94,7 +98,7 @@ export const DEFAULT_SETTINGS = {
   },
 };
 
-const DEFAULT_STATE = { settings: DEFAULT_SETTINGS, user: null, passkeys: [], uptime: {} };
+const DEFAULT_STATE = { settings: DEFAULT_SETTINGS, user: null, passkeys: [], uptime: {}, daily: {} };
 
 function deepMerge(base, over) {
   if (Array.isArray(base) || typeof base !== 'object' || base === null) return over === undefined ? base : over;

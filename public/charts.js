@@ -91,7 +91,7 @@ export function areaChart(el, data, opts = {}) {
     const fmt = opts.format || ((v) => v.toLocaleString('en-GB'));
     const gid = 'g' + Math.random().toString(36).slice(2, 8);
     const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => min + (max - min) * f);
-    const xTicks = data.length ? [0, Math.floor((data.length - 1) / 2), data.length - 1] : [];
+    const xTicks = data.length > 2 ? [0, Math.floor((data.length - 1) / 2), data.length - 1] : data.length === 2 ? [0, 1] : data.length ? [0] : [];
     const color = opts.color || 'var(--series-1)';
 
     el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" class="chart ${animate ? 'animate' : ''}" role="img" aria-label="${esc(opts.label || 'Trend chart')}">
@@ -99,7 +99,7 @@ export function areaChart(el, data, opts = {}) {
         <stop offset="0%" stop-color="${color}" stop-opacity="0.35"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/>
       </linearGradient></defs>
       ${ticks.map((t) => `<line class="grid" x1="${pad.l}" x2="${w - pad.r}" y1="${y(t)}" y2="${y(t)}"/><text class="axis" x="${pad.l - 8}" y="${y(t) + 4}" text-anchor="end">${esc(opts.axisFormat ? opts.axisFormat(t) : compact(t))}</text>`).join('')}
-      ${xTicks.map((i, k) => `<text class="axis" x="${x(i)}" y="${h - 6}" text-anchor="${k === 0 ? 'start' : k === 2 ? 'end' : 'middle'}">${esc(fmtDate(data[i].date))}</text>`).join('')}
+      ${xTicks.map((i, k) => `<text class="axis" x="${x(i)}" y="${h - 6}" text-anchor="${xTicks.length === 1 ? 'middle' : k === 0 ? 'start' : k === xTicks.length - 1 ? 'end' : 'middle'}">${esc(fmtDate(data[i].date))}</text>`).join('')}
       <path class="area-fill" d="${area}" fill="url(#${gid})"/>
       <path class="area-line" d="${line}" stroke="${color}" pathLength="1"/>
       ${pts.length ? `<circle class="end-dot" cx="${pts.at(-1)[0]}" cy="${pts.at(-1)[1]}" r="4" fill="${color}"/>` : ''}
