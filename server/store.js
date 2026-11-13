@@ -53,7 +53,7 @@ export const DEFAULT_SETTINGS = {
   stats: {
     mode: 'api', // 'api' | 'postgres'
     apiBaseUrl: 'https://tutorise.uk',
-    apiPath: '/admin/stats',
+    apiPath: '/api/admin/stats',
     apiToken: '',
     databaseUrl: '',
     databaseSsl: true,
@@ -131,6 +131,7 @@ const OLD_DEFAULT_QUERIES = {
   // AI challenges were first modelled as quizzes; drop those queries if untouched.
   for (const k of ['aiCompletionRate', 'aiAvgScore']) if (q[k]?.includes('ai_challenges')) delete q[k];
   if (q.aiRecent === "SELECT title, subject, level, score, completed_at IS NOT NULL AS completed, created_at FROM ai_challenges ORDER BY created_at DESC LIMIT 12") q.aiRecent = DEFAULT_SETTINGS.stats.queries.aiRecent;
+  if (state.settings.stats.apiPath === '/admin/stats') state.settings.stats.apiPath = DEFAULT_SETTINGS.stats.apiPath;
   // Earlier defaults guessed an api.tutorise.uk host that doesn't exist.
   if (state.settings.stats.apiBaseUrl === 'https://api.tutorise.uk') state.settings.stats.apiBaseUrl = DEFAULT_SETTINGS.stats.apiBaseUrl;
   if (state.settings.uptime.urls === 'https://tutorise.uk\nhttps://api.tutorise.uk/health') state.settings.uptime.urls = DEFAULT_SETTINGS.uptime.urls;

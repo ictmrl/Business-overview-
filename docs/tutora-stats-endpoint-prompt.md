@@ -12,7 +12,7 @@ below. When it's deployed, configure the dashboard as described at the end.
 ```text
 Add a read-only admin stats endpoint for my business dashboard.
 
-Route: GET /admin/stats
+Route: GET /api/admin/stats (if an admin stats route already exists, keep its path and auth and reshape its response)
 Auth: require header `Authorization: Bearer <token>` where the token comes from a
 new environment variable ADMIN_STATS_TOKEN. Compare in constant time. Return 401
 if missing or wrong, and 503 if ADMIN_STATS_TOKEN isn't set. No other auth, no
@@ -107,10 +107,10 @@ Requirements:
 2. **Railway** → tutora → **Variables** → add `ADMIN_STATS_TOKEN` with that value
    (Railway redeploys automatically).
 3. **Check it** (should print JSON, and 401 without the header):
-   `curl -H "Authorization: Bearer <token>" https://tutorise.uk/admin/stats`
+   `curl -H "Authorization: Bearer <token>" https://tutorise.uk/api/admin/stats`
 4. **Dashboard** → Settings → Business data:
    - Source: *Tutorise stats API endpoint*
    - API base URL: `https://tutorise.uk`
-   - Stats path: `/admin/stats`
+   - Stats path: `/api/admin/stats`
    - Bearer token: the same token
    - **Test connection**, then **Save**.

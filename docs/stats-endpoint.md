@@ -3,7 +3,7 @@
 In **Settings → Business data → Tutorise stats API endpoint**, the dashboard calls
 
 ```
-GET {API base URL}{Stats path}        e.g. https://tutorise.uk/admin/stats
+GET {API base URL}{Stats path}        e.g. https://tutorise.uk/api/admin/stats
 Authorization: Bearer <token>
 ```
 
@@ -112,7 +112,7 @@ import express from 'express';
 import { prisma } from '../db.js';
 const router = express.Router();
 
-router.get('/admin/stats', async (req, res) => {
+router.get('/api/admin/stats', async (req, res) => {
   if (req.get('authorization') !== `Bearer ${process.env.ADMIN_STATS_TOKEN}`) return res.sendStatus(401);
   const q = (sql) => prisma.$queryRawUnsafe(sql);
   const [subs] = await q(`SELECT count(*)::int AS total FROM subscriptions WHERE status IN ('active','trialing')`);

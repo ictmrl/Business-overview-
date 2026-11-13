@@ -109,7 +109,7 @@ export async function findDatabaseUrl(cfg) {
   }
   if (!internalHost && nonPostgres) {
     throw new Error(nonPostgres.kind === 'sqlite'
-      ? `“${nonPostgres.service}” stores its data in a SQLite file on its own volume, not in a Postgres database, so the dashboard can't connect to it directly. Use the “Tutorise stats API endpoint” source instead: add a small /admin/stats route to ${nonPostgres.service} (see docs/tutora-stats-endpoint-prompt.md for a ready-made prompt).`
+      ? `“${nonPostgres.service}” stores its data in a SQLite file on its own volume, not in a Postgres database, so the dashboard can't connect to it directly. Use the “Tutorise stats API endpoint” source instead: add a small /api/admin/stats route to ${nonPostgres.service} (see docs/tutora-stats-endpoint-prompt.md for a ready-made prompt).`
       : `“${nonPostgres.service}” uses a ${nonPostgres.kind} database, which the dashboard can't query directly. Use the “Tutorise stats API endpoint” source instead (see docs/tutora-stats-endpoint-prompt.md).`);
   }
   const summary = `Checked ${[...checked, ...unreadable.map((n) => n + ' (couldn’t read variables)')].join(', ')} in “${env.name}”.`;
