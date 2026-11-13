@@ -34,8 +34,13 @@ arrays are daily, oldest first, ideally the last 30 days.
     "history": [{ "date": "2026-10-14", "value": 1010 }]
   },
   "active": {
-    "live": 9,              // users online in the last ~5 minutes
-    "today": 1116,          // distinct users active today
+    "live": 9,              // distinct users (parents + students) active in the last 5 minutes
+    "liveStudents": 7,      // optional split of "live"
+    "liveParents": 2,
+    "today": 1116,          // distinct users (parents + students) active since midnight UK time;
+                            // must include everyone counted in "live"
+    "todayStudents": 950,   // optional split of "today"
+    "todayParents": 166,
     "week": 2140,
     "month": 3310,
     "history": [{ "date": "2026-10-14", "value": 900 }]

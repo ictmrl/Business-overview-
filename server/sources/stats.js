@@ -29,7 +29,7 @@ export function normalizeStats(raw = {}) {
     parentsPaid: opt(acc.parentsPaid), parentsTrialing: opt(acc.parentsTrialing),
     studentsPaid: opt(acc.studentsPaid), studentsTrialing: opt(acc.studentsTrialing),
   };
-  if (Object.keys(a).length) out.active = { live: opt(a.live), today: opt(a.today ?? a.daily), week: opt(a.week ?? a.weekly), month: opt(a.month ?? a.monthly), history: hist(a.history) };
+  if (Object.keys(a).length) out.active = { live: opt(a.live), liveStudents: opt(a.liveStudents), liveParents: opt(a.liveParents), todayStudents: opt(a.todayStudents ?? a.studentsToday), todayParents: opt(a.todayParents ?? a.parentsToday), today: opt(a.today ?? a.daily), week: opt(a.week ?? a.weekly), month: opt(a.month ?? a.monthly), history: hist(a.history) };
   if (Object.keys(u).length) out.usage = { sessionsToday: opt(u.sessionsToday), minutesToday: opt(u.minutesToday), avgSessionMinutes: opt(u.avgSessionMinutes), history: hist(u.history), byHour: Array.isArray(u.byHour) ? u.byHour.map((x) => num(typeof x === 'object' ? x.value : x)) : undefined };
   if (Object.keys(r).length) out.revenue = { currency: r.currency || undefined, mrr: opt(r.mrr), today: opt(r.today), month: opt(r.month), history: hist(r.history) };
   if (Object.keys(ai).length) {

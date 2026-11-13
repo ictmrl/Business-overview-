@@ -322,7 +322,7 @@ function renderOverview(el) {
     <div id="ov-banner"></div>
     <div class="grid g-4">
       <button class="card hero lead" data-metric="subscribers" style="--c:var(--series-1)"><div class="label"><i>${I.users}</i>Subscribers <span class="muted" style="font-weight:400">paid + trial</span></div><div class="value" id="h-subs">—</div><div class="split" id="h-subs-split"></div><div class="meta" id="h-subs-m"></div><div class="spark-wrap" id="h-subs-s"></div></button>
-      <button class="card hero" data-metric="active" style="--c:var(--series-3)"><div class="label"><i>${I.activity}</i>Active customers today</div><div class="value" id="h-act">—</div><div class="meta" id="h-act-m"></div><div class="spark-wrap" id="h-act-s"></div></button>
+      <button class="card hero" data-metric="active" style="--c:var(--series-3)"><div class="label"><i>${I.activity}</i>Active users today</div><div class="value" id="h-act">—</div><div class="meta" id="h-act-who"></div><div class="meta" id="h-act-m"></div><div class="spark-wrap" id="h-act-s"></div></button>
       <button class="card hero" data-metric="revenue" style="--c:var(--series-7)"><div class="label"><i>${I.pound}</i>Monthly recurring revenue</div><div class="value" id="h-mrr">—</div><div class="meta" id="h-mrr-m"></div><div class="spark-wrap" id="h-mrr-s"></div></button>
       <button class="card hero" data-metric="uptime" style="--c:var(--series-4)"><div class="label"><i>${I.shield}</i>Uptime (24h)</div><div class="value" id="h-up">—</div><div class="meta" id="h-up-m"></div><div class="spark-wrap" id="h-up-s" style="padding:8px 20px 14px;height:auto"></div></button>
     </div>
@@ -437,7 +437,11 @@ function renderOverview(el) {
       sparkline($('#h-subs-s', el), (snap.subscribers?.history || []).map((d) => d.value), { color: 'var(--series-1)', animate: isInit });
       drawSplit($('#h-subs-split', el), snap.subscribers);
       countUp($('#h-act', el), snap.active?.today);
-      $('#h-act-m', el).innerHTML = deltaHtml(delta(snap.active?.history?.slice(0, -1))) + (snap.active?.live != null ? `<span>${delta(snap.active?.history?.slice(0, -1)) != null ? '· ' : ''}${int(snap.active.live)} online now</span>` : '');
+      const act = snap.active || {};
+      const who = [act.todayStudents != null && `${int(act.todayStudents)} student${act.todayStudents === 1 ? '' : 's'}`, act.todayParents != null && `${int(act.todayParents)} parent${act.todayParents === 1 ? '' : 's'}`].filter(Boolean);
+      $('#h-act-who', el).innerHTML = who.length ? `<span>${who.join(' · ')}</span>` : '';
+      $('#h-act-who', el).style.marginBottom = who.length ? '4px' : '';
+      $('#h-act-m', el).innerHTML = deltaHtml(delta(snap.active?.history?.slice(0, -1))) + (snap.active?.live != null ? `<span>${delta(snap.active?.history?.slice(0, -1)) != null ? '· ' : ''}${int(snap.active.live)} online now${act.liveStudents != null || act.liveParents != null ? ` (${[act.liveStudents != null && `${int(act.liveStudents)} student${act.liveStudents === 1 ? '' : 's'}`, act.liveParents != null && `${int(act.liveParents)} parent${act.liveParents === 1 ? '' : 's'}`].filter(Boolean).join(', ')})` : ''}</span>` : '');
       sparkline($('#h-act-s', el), (snap.active?.history || []).map((d) => d.value), { color: 'var(--series-3)', animate: isInit });
       countUp($('#h-mrr', el), snap.revenue?.mrr, (n) => money(n, cur));
       $('#h-mrr-m', el).innerHTML = snap.revenue ? `<span>${money(snap.revenue.month, cur)} this month</span>` : '';
