@@ -31,12 +31,23 @@ export function normalizeStats(raw = {}) {
   if (Object.keys(a).length) out.active = { live: opt(a.live), today: opt(a.today ?? a.daily), week: opt(a.week ?? a.weekly), month: opt(a.month ?? a.monthly), history: hist(a.history) };
   if (Object.keys(u).length) out.usage = { sessionsToday: opt(u.sessionsToday), minutesToday: opt(u.minutesToday), avgSessionMinutes: opt(u.avgSessionMinutes), history: hist(u.history), byHour: Array.isArray(u.byHour) ? u.byHour.map((x) => num(typeof x === 'object' ? x.value : x)) : undefined };
   if (Object.keys(r).length) out.revenue = { currency: r.currency || undefined, mrr: opt(r.mrr), today: opt(r.today), month: opt(r.month), history: hist(r.history) };
-  if (Object.keys(ai).length) out.ai = {
-    total: opt(ai.total), today: opt(ai.today), completionRate: opt(ai.completionRate), avgScore: opt(ai.avgScore),
-    bySubject: (ai.bySubject || []).map((x) => ({ name: x.name ?? x.subject, value: num(x.value ?? x.count) })),
-    byLevel: (ai.byLevel || []).map((x) => ({ name: x.name ?? x.level, value: num(x.value ?? x.count) })),
-    recent: (ai.recent || []).map((x) => ({ title: x.title || x.name || 'Challenge', subject: x.subject || '', level: x.level || '', student: x.student || x.user || '', score: x.score == null ? null : num(x.score), completed: x.completed ?? x.score != null, createdAt: x.createdAt || x.created_at })),
-  };
+  if (Object.keys(ai).length) {
+    const pairs = (xs, key) => (xs || []).map((x) => ({ name: String(x.name ?? x[key] ?? 'Other'), value: num(x.value ?? x.count) }));
+    out.ai = {
+      total: opt(ai.total), today: opt(ai.today), week: opt(ai.week),
+      open: opt(ai.open ?? ai.pending),
+      upheldRate: opt(ai.upheldRate ?? ai.aiWrongRate ?? ai.overturnedRate),
+      bySubject: pairs(ai.bySubject, 'subject'),
+      byReason: pairs(ai.byReason, 'reason'),
+      byOutcome: pairs(ai.byOutcome ?? ai.byStatus, 'status'),
+      history: hist(ai.history),
+      recent: (ai.recent || []).map((x) => ({
+        summary: String(x.summary ?? x.question ?? x.title ?? 'Challenge').slice(0, 240),
+        subject: x.subject || '', reason: x.reason || '', status: x.status || '',
+        createdAt: x.createdAt || x.created_at,
+      })),
+    };
+  }
   return out;
 }
 
@@ -76,7 +87,7 @@ async function fromPostgres(cfg) {
     active: { today: one('activeToday'), week: one('activeWeek'), month: one('activeMonth'), history: rows.usageHistory },
     usage: { sessionsToday: byHour?.reduce((a, b) => a + b, 0), history: rows.usageHistory, byHour },
     revenue: { mrr: one('mrr'), month: one('revenueMonth'), today: rows.revenueHistory?.find((r) => String(r.date).slice(0, 10) === new Date().toISOString().slice(0, 10))?.value, history: rows.revenueHistory },
-    ai: { total: one('aiChallengesTotal'), today: one('aiChallengesToday'), completionRate: one('aiCompletionRate'), avgScore: one('aiAvgScore'), bySubject: rows.aiBySubject, recent: rows.aiRecent },
+    ai: { total: one('aiChallengesTotal'), today: one('aiChallengesToday'), open: one('aiOpen'), upheldRate: one('aiUpheldRate'), bySubject: rows.aiBySubject, byReason: rows.aiByReason, byOutcome: rows.aiByOutcome, history: rows.aiHistory, recent: rows.aiRecent },
   };
   const out = normalizeStats(raw);
   if (Object.keys(errors).length) out._queryErrors = errors;

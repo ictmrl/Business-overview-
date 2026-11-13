@@ -4,7 +4,7 @@ A real-time, single-screen overview of Tutorise.uk that runs locally on your Mac
 
 - **Hero metrics**: subscribers, active customers, MRR and uptime, with animated counters, trend deltas and sparklines. Click a hero card to switch the main chart to it.
 - **Live updates**: the server pulls every source on an interval and pushes changes to the browser over Server-Sent Events. Your inbox updates instantly using IMAP IDLE.
-- **AI challenges**: totals, today's pace, completion rate, average score, a subject breakdown, a level donut and a live feed of challenges as students start them.
+- **AI challenges**: answers from the AI tutor that students or parents disputed — totals, open vs reviewed, how often the AI was wrong (upheld rate), why answers are challenged, subjects, outcomes and a live list of what was disputed.
 - **Infrastructure**: Railway services with deploy status, CPU and memory, plus HTTP uptime monitors (24h strip, response-time trend, 90-day uptime).
 - **Inbox**: read your IMAP mail, search, mark as unread and reply. Replies are sent over SMTP, threaded correctly and copied to Sent.
 - **Settings tab**: Railway, business data (API endpoint or direct Postgres), Stripe (optional), email, uptime URLs, passkeys and password.

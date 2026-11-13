@@ -83,10 +83,13 @@ export const DEFAULT_SETTINGS = {
       mrr: "SELECT coalesce(sum(price_amount),0)/100.0 AS value FROM subscriptions WHERE status = 'active'",
       aiChallengesTotal: "SELECT count(*)::int AS value FROM ai_challenges",
       aiChallengesToday: "SELECT count(*)::int AS value FROM ai_challenges WHERE created_at >= date_trunc('day', now())",
-      aiCompletionRate: "SELECT coalesce(avg(CASE WHEN completed_at IS NOT NULL THEN 1 ELSE 0 END),0) * 100 AS value FROM ai_challenges WHERE created_at >= now() - interval '30 days'",
-      aiAvgScore: "SELECT coalesce(avg(score),0) AS value FROM ai_challenges WHERE score IS NOT NULL AND created_at >= now() - interval '30 days'",
+      aiOpen: "SELECT count(*)::int AS value FROM ai_challenges WHERE status IN ('open','pending')",
+      aiUpheldRate: "SELECT coalesce(avg(CASE WHEN status = 'upheld' THEN 100.0 ELSE 0 END), 0) AS value FROM ai_challenges WHERE status NOT IN ('open','pending') AND created_at >= now() - interval '30 days'",
       aiBySubject: "SELECT subject AS name, count(*)::int AS value FROM ai_challenges WHERE created_at >= now() - interval '30 days' GROUP BY 1 ORDER BY 2 DESC LIMIT 8",
-      aiRecent: "SELECT title, subject, level, score, completed_at IS NOT NULL AS completed, created_at FROM ai_challenges ORDER BY created_at DESC LIMIT 12",
+      aiByReason: "SELECT reason AS name, count(*)::int AS value FROM ai_challenges WHERE created_at >= now() - interval '30 days' GROUP BY 1 ORDER BY 2 DESC LIMIT 8",
+      aiByOutcome: "SELECT status AS name, count(*)::int AS value FROM ai_challenges WHERE created_at >= now() - interval '30 days' GROUP BY 1 ORDER BY 2 DESC",
+      aiHistory: "SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS date, count(*)::int AS value FROM ai_challenges WHERE created_at >= now() - interval '30 days' GROUP BY 1 ORDER BY 1",
+      aiRecent: "SELECT left(summary, 240) AS summary, subject, reason, status, created_at FROM ai_challenges ORDER BY created_at DESC LIMIT 12",
     },
   },
   stripe: { secretKey: '' },
@@ -125,6 +128,9 @@ const OLD_DEFAULT_QUERIES = {
   for (const [k, olds] of Object.entries(OLD_DEFAULT_QUERIES)) {
     if (olds.includes(q[k])) q[k] = DEFAULT_SETTINGS.stats.queries[k];
   }
+  // AI challenges were first modelled as quizzes; drop those queries if untouched.
+  for (const k of ['aiCompletionRate', 'aiAvgScore']) if (q[k]?.includes('ai_challenges')) delete q[k];
+  if (q.aiRecent === "SELECT title, subject, level, score, completed_at IS NOT NULL AS completed, created_at FROM ai_challenges ORDER BY created_at DESC LIMIT 12") q.aiRecent = DEFAULT_SETTINGS.stats.queries.aiRecent;
   // Earlier defaults guessed an api.tutorise.uk host that doesn't exist.
   if (state.settings.stats.apiBaseUrl === 'https://api.tutorise.uk') state.settings.stats.apiBaseUrl = DEFAULT_SETTINGS.stats.apiBaseUrl;
   if (state.settings.uptime.urls === 'https://tutorise.uk\nhttps://api.tutorise.uk/health') state.settings.uptime.urls = DEFAULT_SETTINGS.uptime.urls;

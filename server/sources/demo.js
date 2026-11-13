@@ -18,34 +18,34 @@ function series(days, start, growth, noise) {
   return out;
 }
 
-const live = { subs: 1284, active: 0, sessions: 0, revenueToday: 0, ai: 18420, aiToday: 0 };
+const live = { subs: 1284, active: 0, sessions: 0, revenueToday: 0, ai: 412, aiToday: 0 };
 const started = Date.now();
 
 const SUBJECTS = ['Maths', 'English', 'Physics', 'Chemistry', 'Biology', 'Computer Science', 'History', 'French'];
-const LEVELS = ['KS2', 'KS3', 'GCSE', 'A-Level'];
-const TITLES = {
-  Maths: ['Quadratic equations sprint', 'Simultaneous equations', 'Probability trees', 'Circle theorems', 'Differentiation basics'],
-  English: ['Macbeth: themes of ambition', 'Persuasive writing drill', 'Poetry comparison', 'Inspector Calls quotes'],
-  Physics: ['Forces & motion', 'Electric circuits', 'Waves & the EM spectrum', 'Specific heat capacity'],
-  Chemistry: ['Balancing equations', 'Rates of reaction', 'Ionic bonding quiz', 'Electrolysis'],
-  Biology: ['Cell structure', 'Photosynthesis', 'Homeostasis', 'Genetics & inheritance'],
-  'Computer Science': ['Binary & hex', 'Python loops', 'Sorting algorithms', 'Boolean logic'],
-  History: ['Causes of WW1', 'Norman conquest', 'Cold War timeline'],
-  French: ['Past tense verbs', 'Vocabulary: school life', 'Listening practice'],
+const REASONS = ['Answer is wrong', 'Marked my answer wrong', 'Explanation unclear', 'Different method taught at school', 'Not on my syllabus'];
+const QUESTIONS = {
+  Maths: ['Solve 3x² − 12 = 0: tutor said x = 4 only', 'Probability of two sixes: tutor gave 1/6', 'Area of a sector, radius 5, angle 72°', 'Factorise x² + 5x + 6'],
+  English: ['Is "ambition" the main theme in Macbeth Act 1?', 'Feedback on persuasive essay ignored counter-argument', 'Use of semicolons in sample answer'],
+  Physics: ['Units for specific heat capacity', 'Resistance of two 4Ω resistors in parallel', 'Speed of light in glass'],
+  Chemistry: ['Balancing Fe + O₂ → Fe₂O₃', 'Ionic charge of aluminium', 'Rate of reaction vs temperature graph'],
+  Biology: ['Where does the Krebs cycle happen?', 'Function of ribosomes', 'Inheritance of colour blindness'],
+  'Computer Science': ['Binary of 45', 'Python range(1, 5) output', 'Big-O of bubble sort best case'],
+  History: ['Date of the Treaty of Versailles', 'Main cause of WW1 marking'],
+  French: ['Passé composé of "aller"', 'Gender of "problème"'],
 };
-const NAMES = ['Amelia', 'Oliver', 'Isla', 'George', 'Ava', 'Noah', 'Freya', 'Leo', 'Mia', 'Arthur', 'Sophia', 'Harry'];
+const STATUSES = [['open', 0.3], ['upheld', 0.25], ['rejected', 0.45]];
 const recent = [];
 function newChallenge(t = Date.now()) {
   const subject = SUBJECTS[Math.floor(Math.random() ** 1.6 * SUBJECTS.length)];
-  const list = TITLES[subject];
-  const completed = Math.random() > 0.22;
+  const qs = QUESTIONS[subject];
+  let r = Math.random(), status = 'rejected';
+  for (const [st, p] of STATUSES) { if ((r -= p) < 0) { status = st; break; } }
+  if (Date.now() - t < 20 * 60_000) status = 'open';
   return {
-    title: list[Math.floor(Math.random() * list.length)],
+    summary: qs[Math.floor(Math.random() * qs.length)],
     subject,
-    level: LEVELS[Math.floor(Math.random() * LEVELS.length)],
-    student: NAMES[Math.floor(Math.random() * NAMES.length)],
-    score: completed ? Math.round(rnd(48, 100)) : null,
-    completed,
+    reason: REASONS[Math.floor(Math.random() ** 1.4 * REASONS.length)],
+    status,
     createdAt: new Date(t).toISOString(),
   };
 }
@@ -57,8 +57,8 @@ export function demoStats() {
   const dayFrac = (hour * 60 + new Date().getMinutes()) / 1440;
   // Drift
   if (Math.random() > 0.6) live.subs += Math.random() > 0.15 ? 1 : -1;
-  live.aiToday = Math.round(dayFrac * 640 + mins * 0.8);
-  if (Math.random() > 0.4) recent.unshift(newChallenge()), recent.splice(12);
+  live.aiToday = Math.round(dayFrac * 9 + mins * 0.05);
+  if (Math.random() > 0.85) recent.unshift(newChallenge()), recent.splice(12);
 
   const subsHist = series(30, 1010, 0.0072, 6);
   subsHist[subsHist.length - 1].value = live.subs;
@@ -73,9 +73,10 @@ export function demoStats() {
   const activeToday = Math.round(activeHist.at(-2).value * (0.3 + 0.7 * dayFrac));
   activeHist[activeHist.length - 1].value = activeToday;
   const counts = {};
-  for (const s of SUBJECTS) counts[s] = 0;
-  SUBJECTS.forEach((s, i) => (counts[s] = Math.round(4200 / (i + 1.3) + rnd(0, 120))));
-  const levels = { KS2: 1820, KS3: 3940, GCSE: 8610, 'A-Level': 4050 };
+  SUBJECTS.forEach((s, i) => (counts[s] = Math.round(96 / (i + 1.3) + rnd(0, 4))));
+  const reasons = REASONS.map((name, i) => ({ name, value: Math.round(70 / (i + 1) + 3) }));
+  const aiHist = series(30, 7, 0.01, 4).map((d) => ({ ...d, value: Math.round(d.value) }));
+  aiHist[aiHist.length - 1].value = live.aiToday;
 
   return {
     accounts: { parents: 1046, students: Math.round(live.subs * 1.18), parentsPaid: 912, parentsTrialing: 71, studentsPaid: Math.round(live.subs * 1.18) - 112, studentsTrialing: 97, parentsNewToday: Math.round(dayFrac * 6) + 1, studentsNewToday: Math.round(dayFrac * 9) + 1 },
@@ -86,10 +87,12 @@ export function demoStats() {
     ai: {
       total: live.ai + live.aiToday,
       today: live.aiToday,
-      completionRate: 78.4,
-      avgScore: 74.2,
+      open: recent.filter((c) => c.status === 'open').length + 3,
+      upheldRate: 31.6,
       bySubject: Object.entries(counts).map(([name, value]) => ({ name, value })),
-      byLevel: Object.entries(levels).map(([name, value]) => ({ name, value })),
+      byReason: reasons,
+      byOutcome: [{ name: 'Rejected', value: 118 }, { name: 'Upheld', value: 54 }, { name: 'Open', value: 9 }],
+      history: aiHist,
       recent: recent.slice(),
     },
   };

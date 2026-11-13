@@ -54,21 +54,23 @@ arrays are daily, oldest first, ideally the last 30 days.
     "month": 3644,
     "history": [{ "date": "2026-10-14", "value": 410.5 }]
   },
-  "ai": {
-    "total": 19059,         // challenges generated, all time
-    "today": 640,
-    "completionRate": 78.4, // %
-    "avgScore": 74.2,       // %
-    "bySubject": [{ "name": "Maths", "value": 3323 }],
-    "byLevel":   [{ "name": "GCSE",  "value": 8610 }],
-    "recent": [{
-      "title": "Quadratic equations sprint",
+  "ai": {                    // AI challenges = answers from the AI tutor that a
+                             // student or parent disputed (e.g. an AiChallenge table)
+    "total": 412,            // all time
+    "today": 4,
+    "week": 31,              // optional
+    "open": 10,              // waiting for review
+    "upheldRate": 31.6,      // % of reviewed challenges (last 30 days) where the AI was wrong
+    "bySubject": [{ "name": "Maths", "value": 78 }],              // last 30 days
+    "byReason":  [{ "name": "Answer is wrong", "value": 73 }],    // why it was disputed
+    "byOutcome": [{ "name": "rejected", "value": 118 }, { "name": "upheld", "value": 54 }, { "name": "open", "value": 9 }],
+    "history":   [{ "date": "2026-10-15", "value": 6 }],          // challenges per day
+    "recent": [{             // latest 12, no names or personal data
+      "summary": "Solve 3x² − 12 = 0: tutor said x = 4 only",   // what was disputed (≤240 chars)
       "subject": "Maths",
-      "level": "GCSE",
-      "student": "Amelia",  // first name only, or leave out
-      "score": 82,          // null while in progress
-      "completed": true,
-      "createdAt": "2026-11-12T18:04:00Z"
+      "reason": "Answer is wrong",
+      "status": "open",      // open | upheld | rejected (other values shown as-is)
+      "createdAt": "2026-11-13T09:00:00Z"
     }]
   }
 }
@@ -83,7 +85,21 @@ your number of families.
 The dashboard also accepts a few alternative names: `families` / `children`
 for `parents` / `students`, `activeCustomers` for
 `active`, `aiChallenges` for `ai`, `daily/weekly/monthly` for
-`today/week/month`, and `count` / `subject` / `level` in the breakdown arrays.
+`today/week/month`, `count` in the breakdown arrays, `byStatus` for
+`byOutcome`, and `question` or `title` for a challenge's `summary`.
+
+### What the dashboard actually displays
+
+Everything above is optional. If you're short on time, these are the fields
+the screens use; the rest (`churnRate`, `active.week/month`, `usage.minutesToday`,
+`usage.avgSessionMinutes`, `usage.history`) are accepted but not shown yet.
+
+- `accounts`: all fields
+- `subscribers`: `paid`, `trialing`, `trialsEndingSoon`, `newToday`, `newTrialsToday`, `history`
+- `active`: `live`, `today`, `history`
+- `usage`: `sessionsToday`, `byHour`
+- `revenue`: `mrr`, `today`, `month`, `history` (skip if Stripe is connected)
+- `ai`: all fields
 
 ## Example route (Express + Prisma)
 

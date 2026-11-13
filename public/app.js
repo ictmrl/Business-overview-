@@ -294,6 +294,25 @@ const serviceStatus = (s) => {
   if (s === 'NO_DEPLOYMENT') return ['neutral', 'No deploys'];
   return ['critical', s ? s[0] + s.slice(1).toLowerCase() : 'Unknown'];
 };
+// An AI challenge = a student or parent disputing an answer from the AI tutor.
+function challengeStatus(s) {
+  const v = String(s || '');
+  if (!v) return ['neutral', '—', ''];
+  if (/open|pending|new|review|await/i.test(v)) return ['warning', 'Open', 'Waiting for review'];
+  if (/uphe|accept|valid|overturn|ai.?wrong|correct/i.test(v)) return ['critical', 'Upheld', 'Challenge upheld: the AI tutor’s answer was wrong'];
+  if (/reject|dismiss|invalid|declin|ai.?right/i.test(v)) return ['neutral', 'Rejected', 'Challenge rejected: the AI tutor’s answer stood'];
+  if (/resolv|closed|done/i.test(v)) return ['good', 'Resolved', ''];
+  return ['neutral', v, ''];
+}
+const challengeRow = (c, isNew) => {
+  const [cls, label, tip] = challengeStatus(c.status);
+  return `<div class="row ${isNew ? 'new' : ''}">
+    ${c.subject ? `<span class="tag">${esc(c.subject)}</span>` : ''}
+    <div class="grow"><div class="title" title="${esc(c.summary)}">${esc(c.summary)}</div><div class="desc">${esc(c.reason || '')}</div></div>
+    <span class="status ${cls}" title="${esc(tip)}">${esc(label)}</span>
+    <span class="time">${ago(c.createdAt)}</span></div>`;
+};
+const challengeKey = (c) => c.createdAt + '|' + c.summary;
 const shortUrl = (u) => u.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
 // ------------------------------------------------------------------ overview
@@ -336,14 +355,15 @@ function renderOverview(el) {
     </div>
     <div class="grid g-3">
       <div class="card">
-        <div class="card-head"><h3>AI challenges</h3><span class="sub">last 30 days</span><div class="right"><a href="#ai" class="btn sm ghost">Details →</a></div></div>
+        <div class="card-head"><h3>AI challenges</h3><span class="sub">disputed tutor answers</span><div class="right"><a href="#ai" class="btn sm ghost">Details →</a></div></div>
         <div style="display:flex;gap:18px;align-items:center;margin-bottom:16px">
           <div class="ring-wrap" id="ai-ring"></div>
           <div style="display:grid;gap:10px;flex:1">
             <div class="mini"><div class="k">Today</div><div class="v" id="ai-today">—</div></div>
-            <div class="mini"><div class="k">All time</div><div class="v" id="ai-total">—</div></div>
+            <div class="mini"><div class="k">Open</div><div class="v" id="ai-open">—</div></div>
           </div>
         </div>
+        <div class="muted" style="font-size:12px;margin-bottom:8px">Most challenged subjects</div>
         <div class="hbars" id="ai-subjects"></div>
       </div>
       <div class="card">
@@ -357,7 +377,7 @@ function renderOverview(el) {
       </div>
     </div>
     <div class="card">
-      <div class="card-head"><h3>Live AI challenge feed</h3><span class="sub">what students are working on right now</span></div>
+      <div class="card-head"><h3>Latest AI challenges</h3><span class="sub">answers students and parents have disputed</span><div class="right"><a href="#ai" class="btn sm ghost">All →</a></div></div>
       <div class="list" id="ai-feed"></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap" id="chips"></div>
@@ -436,26 +456,18 @@ function renderOverview(el) {
       countUp($('#t-trials', el), snap.subscribers?.newTrialsToday);
       countUp($('#t-rev', el), snap.revenue?.today, (n) => money(n, cur));
 
-      // AI
+      // AI challenges
       const ai = snap.ai;
       if (ai) {
-        ring($('#ai-ring', el), ai.completionRate, { color: 'var(--series-3)', caption: 'completion rate', decimals: 0, label: 'Completion rate' });
+        ring($('#ai-ring', el), ai.upheldRate, { color: 'var(--series-2)', caption: 'upheld (AI was wrong)', decimals: 0, label: 'Share of reviewed challenges where the AI tutor was wrong' });
         countUp($('#ai-today', el), ai.today);
-        countUp($('#ai-total', el), ai.total, (n) => compact(n));
-        hBars($('#ai-subjects', el), (ai.bySubject || []).slice(0, 5), { color: 'var(--series-1)' });
+        countUp($('#ai-open', el), ai.open);
+        if (ai.bySubject?.length) hBars($('#ai-subjects', el), ai.bySubject.slice(0, 5), { color: 'var(--series-1)' });
+        else $('#ai-subjects', el).innerHTML = '<div class="muted" style="font-size:12.5px">No subject breakdown provided</div>';
         const feed = (ai.recent || []).slice(0, 6);
-        $('#ai-feed', el).innerHTML = feed.length ? feed.map((c) => {
-          const k = c.createdAt + c.title;
-          const isNew = !first && !isInit && !seenAI.has(k);
-          return `<div class="row ${isNew ? 'new' : ''}">
-            <span class="tag">${esc(c.subject)}</span>
-            <div class="grow"><div class="title">${esc(c.title)}</div><div class="desc">${esc([c.level, c.student].filter(Boolean).join(' · '))}</div></div>
-            ${c.completed ? `<span class="status good">Completed</span>` : `<span class="status neutral">In progress</span>`}
-            <span class="score">${c.score != null ? c.score + '%' : '—'}</span>
-            <span class="time">${ago(c.createdAt)}</span></div>`;
-        }).join('') : '<div class="empty">No challenges yet</div>';
-        seenAI = new Set(feed.map((c) => c.createdAt + c.title));
-      }
+        $('#ai-feed', el).innerHTML = feed.length ? feed.map((c) => challengeRow(c, !first && !isInit && !seenAI.has(challengeKey(c)))).join('') : '<div class="empty">No challenges yet</div>';
+        seenAI = new Set(feed.map(challengeKey));
+      } else $('#ai-feed', el).innerHTML = '<div class="empty">No AI challenge data from your business data source yet</div>';
 
       // Inbox
       const ib = snap.inbox;
@@ -493,52 +505,54 @@ function renderOverview(el) {
 }
 
 // ------------------------------------------------------------------ AI view
+// AI challenges: answers from the AI tutor that a student or parent disputed.
 function renderAI(el) {
-  let seen = new Set(), drawn = false;
+  let seen = new Set(), drawn = false, filter = 'all';
   el.innerHTML = `<div class="view">
     <div class="grid g-4">
-      <div class="card hero lead" style="--c:var(--series-7);cursor:default"><div class="label"><i>${I.ai}</i>Challenges generated</div><div class="value" id="a-total">—</div><div class="meta">all time</div></div>
-      <div class="card hero" style="--c:var(--series-1);cursor:default"><div class="label"><i>${I.activity}</i>Today</div><div class="value" id="a-today">—</div><div class="meta" id="a-today-m">since midnight</div></div>
-      <div class="card hero" style="--c:var(--series-3);cursor:default"><div class="label"><i>${I.shield}</i>Completion rate</div><div class="value" id="a-comp">—</div><div class="meta">last 30 days</div></div>
-      <div class="card hero" style="--c:var(--series-4);cursor:default"><div class="label"><i>${I.users}</i>Average score</div><div class="value" id="a-score">—</div><div class="meta">completed challenges</div></div>
+      <div class="card hero lead" style="--c:var(--series-7);cursor:default"><div class="label"><i>${I.ai}</i>AI challenges</div><div class="value" id="a-total">—</div><div class="meta" id="a-total-m">all time</div></div>
+      <div class="card hero" style="--c:var(--series-1);cursor:default"><div class="label"><i>${I.activity}</i>Today</div><div class="value" id="a-today">—</div><div class="meta">since midnight</div></div>
+      <div class="card hero" style="--c:var(--series-4);cursor:default"><div class="label"><i>${I.mail}</i>Open</div><div class="value" id="a-open">—</div><div class="meta">waiting for review</div></div>
+      <div class="card hero" style="--c:var(--series-2);cursor:default"><div class="label"><i>${I.shield}</i>Upheld rate</div><div class="value" id="a-upheld">—</div><div class="meta">AI was wrong · last 30 days</div></div>
+    </div>
+    <div class="grid g-main">
+      <div class="card"><div class="card-head"><h3>Challenges per day</h3><span class="sub">last 30 days</span></div><div class="chart-box" id="a-hist"></div></div>
+      <div class="card"><div class="card-head"><h3>Why answers are challenged</h3><span class="sub">last 30 days</span></div><div class="hbars" id="a-reason"></div></div>
     </div>
     <div class="grid g-2">
       <div class="card"><div class="card-head"><h3>By subject</h3><span class="sub">last 30 days</span></div><div class="hbars" id="a-subj"></div></div>
-      <div class="card"><div class="card-head"><h3>By level</h3><span class="sub">share of challenges</span></div><div id="a-level"></div>
-        <div class="card-head" style="margin-top:22px"><h3>Today vs average</h3></div><div class="stats-row" id="a-mini"></div></div>
+      <div class="card"><div class="card-head"><h3>Outcomes</h3><span class="sub">what happened after review</span></div><div id="a-outcome"></div></div>
     </div>
-    <div class="card"><div class="card-head"><h3>Recent challenges</h3><span class="sub">live — new ones slide in</span><div class="right"><input type="text" id="a-q" placeholder="Filter by subject or title…" style="width:240px;padding:7px 10px"></div></div>
+    <div class="card"><div class="card-head"><h3>Recent challenges</h3><span class="sub">what was disputed — new ones slide in</span><div class="right"><div class="seg" id="a-f"><button data-f="all" class="on">All</button><button data-f="open">Open</button><button data-f="upheld">Upheld</button></div><input type="text" id="a-q" placeholder="Filter…" style="width:200px;padding:7px 10px"></div></div>
       <div class="list" id="a-recent"></div></div>
   </div>`;
   $('#a-q', el).oninput = () => state.snap && update(state.snap);
+  $$('#a-f button', el).forEach((b) => (b.onclick = () => { filter = b.dataset.f; $$('#a-f button', el).forEach((x) => x.classList.toggle('on', x === b)); if (state.snap) update(state.snap); }));
+  const empty = (id, what) => ($(id, el).innerHTML = `<div class="muted" style="font-size:12.5px">No ${what} breakdown provided</div>`);
   function update(snap, why) {
     if (why === 'uptime') return;
     const ai = snap.ai;
-    if (!ai) { $('#a-recent', el).innerHTML = '<div class="empty">No AI challenge data yet — configure your business data source in Settings.</div>'; return; }
+    if (!ai) { $('#a-recent', el).innerHTML = '<div class="empty">No AI challenge data yet. Your business data source needs to return an “ai” section — see docs/stats-endpoint.md.</div>'; return; }
     countUp($('#a-total', el), ai.total);
+    $('#a-total-m', el).textContent = ai.week != null ? `all time · ${int(ai.week)} this week` : 'all time';
     countUp($('#a-today', el), ai.today);
-    countUp($('#a-comp', el), ai.completionRate, (n) => `${n.toFixed(1)}%`);
-    countUp($('#a-score', el), ai.avgScore, (n) => `${n.toFixed(1)}%`);
-    hBars($('#a-subj', el), ai.bySubject || [], { color: 'var(--series-1)' });
-    const lv = (ai.byLevel || []).slice(0, 4);
-    if (lv.length && !drawn) donut($('#a-level', el), lv, ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)'], { center: 'challenges', label: 'Challenges by level' });
-    else if (!lv.length) $('#a-level', el).innerHTML = '<div class="empty">No level breakdown provided</div>';
-    const daysSoFar = Math.max(0.05, (Date.now() - new Date().setHours(0, 0, 0, 0)) / 86_400_000);
-    $('#a-mini', el).innerHTML = `
-      <div class="mini"><div class="k">Pace today</div><div class="v">${ai.today != null ? int(ai.today / daysSoFar) : '—'}</div><div class="muted" style="font-size:11.5px">projected/day</div></div>
-      <div class="mini"><div class="k">Top subject</div><div class="v" style="font-size:17px">${esc(ai.bySubject?.[0]?.name || '—')}</div></div>
-      <div class="mini"><div class="k">Subjects</div><div class="v">${(ai.bySubject || []).length}</div></div>`;
+    countUp($('#a-open', el), ai.open);
+    countUp($('#a-upheld', el), ai.upheldRate, (n) => `${n.toFixed(1)}%`);
+    const box = $('#a-hist', el);
+    if (ai.history?.length) areaChart(box, ai.history, { color: 'var(--series-7)', animate: !drawn, label: 'AI challenges per day' });
+    else { box.innerHTML = '<div class="empty">No daily history provided</div>'; box.__chart = null; }
+    if (ai.byReason?.length) hBars($('#a-reason', el), ai.byReason, { color: 'var(--series-2)' }); else empty('#a-reason', 'reason');
+    if (ai.bySubject?.length) hBars($('#a-subj', el), ai.bySubject, { color: 'var(--series-1)' }); else empty('#a-subj', 'subject');
+    let oc = (ai.byOutcome || []).slice().sort((x, y) => y.value - x.value);
+    if (oc.length > 4) oc = [...oc.slice(0, 3), { name: 'Other', value: oc.slice(3).reduce((t, x) => t + x.value, 0) }];
+    oc = oc.map((o) => { const lab = challengeStatus(o.name)[1]; return { ...o, name: lab === '—' ? o.name : lab }; });
+    if (oc.length && !drawn) donut($('#a-outcome', el), oc, ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)'], { center: 'challenges', label: 'Challenge outcomes' });
+    else if (!oc.length) empty('#a-outcome', 'outcome');
     const q = $('#a-q', el).value.trim().toLowerCase();
-    const list = (ai.recent || []).filter((c) => !q || `${c.title} ${c.subject} ${c.level}`.toLowerCase().includes(q));
-    $('#a-recent', el).innerHTML = list.length ? list.map((c) => {
-      const k = c.createdAt + c.title;
-      return `<div class="row ${drawn && !seen.has(k) ? 'new' : ''}">
-        <span class="tag">${esc(c.subject)}</span>
-        <div class="grow"><div class="title">${esc(c.title)}</div><div class="desc">${esc([c.level, c.student].filter(Boolean).join(' · '))}</div></div>
-        ${c.completed ? '<span class="status good">Completed</span>' : '<span class="status neutral">In progress</span>'}
-        <span class="score">${c.score != null ? c.score + '%' : '—'}</span><span class="time">${ago(c.createdAt)}</span></div>`;
-    }).join('') : '<div class="empty">No matching challenges</div>';
-    seen = new Set((ai.recent || []).map((c) => c.createdAt + c.title));
+    const list = (ai.recent || []).filter((c) => (filter === 'all' || challengeStatus(c.status)[1].toLowerCase() === filter)
+      && (!q || `${c.summary} ${c.subject} ${c.reason} ${c.status}`.toLowerCase().includes(q)));
+    $('#a-recent', el).innerHTML = list.length ? list.map((c) => challengeRow(c, drawn && !seen.has(challengeKey(c)))).join('') : '<div class="empty">No matching challenges</div>';
+    seen = new Set((ai.recent || []).map(challengeKey));
     drawn = true;
   }
   return { update };

@@ -62,18 +62,22 @@ for the last 30 days, with dates as "YYYY-MM-DD".
     "month": 0,
     "history": [{ "date": "2026-10-15", "value": 0 }]
   },
-  "ai": {
-    "total": 0,              // AI challenges generated, all time
+  "ai": {                    // AI challenges = answers from the AI tutor that a
+                             // student or parent disputed (e.g. an AiChallenge table)
+    "total": 0,            // all time
     "today": 0,
-    "completionRate": 0,     // % of challenges completed, last 30 days
-    "avgScore": 0,           // average % score of completed challenges, last 30 days
-    "bySubject": [{ "name": "Maths", "value": 0 }],      // last 30 days, top 8
-    "byLevel": [{ "name": "GCSE", "value": 0 }],
-    "recent": [{                                         // latest 12
-      "title": "", "subject": "", "level": "",
-      "student": "",         // first name only, never surname/email
-      "score": null,         // null while in progress
-      "completed": false,
+    "week": 0,              // optional
+    "open": 0,              // waiting for review
+    "upheldRate": 0,      // % of reviewed challenges (last 30 days) where the AI was wrong
+    "bySubject": [{ "name": "Maths", "value": 0 }],              // last 30 days
+    "byReason":  [{ "name": "Answer is wrong", "value": 0 }],    // why it was disputed
+    "byOutcome": [{ "name": "rejected", "value": 0 }, { "name": "upheld", "value": 0 }, { "name": "open", "value": 0 }],
+    "history":   [{ "date": "2026-10-15", "value": 0 }],          // challenges per day
+    "recent": [{             // latest 12, no names or personal data
+      "summary": "Solve 3x² − 12 = 0: tutor said x = 4 only",   // what was disputed (≤240 chars)
+      "subject": "Maths",
+      "reason": "Answer is wrong",
+      "status": "open",      // open | upheld | rejected (other values shown as-is)
       "createdAt": "2026-11-13T09:00:00Z"
     }]
   }
@@ -86,6 +90,11 @@ Requirements:
 - Don't include emails, surnames, payment details or any other personal data.
 - If revenue lives only in Stripe, it's fine to omit "revenue" (the dashboard
   can read Stripe directly).
+- "ai" is about AI challenges: answers from the AI tutor that a student or
+  parent disputed. Map our challenge/flag statuses to open / upheld (the AI was
+  wrong) / rejected (the AI's answer stood).
+- You can skip churnRate, active.week/month, usage.minutesToday,
+  usage.avgSessionMinutes and usage.history: the dashboard doesn't show them yet.
 - Add a short test for the 401 path, and document ADMIN_STATS_TOKEN in the README.
 - Tell me exactly which tables/columns each number comes from when you're done.
 ```
