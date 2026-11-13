@@ -264,26 +264,34 @@ function demoBanner(snap) {
   return '';
 }
 /** Paid vs trial split: a two-segment bar plus labelled counts (never colour alone). */
+/**
+ * Plan split: a segmented bar plus labelled counts (never colour alone).
+ * s: { paid, trialing, free?, inactive?, total?, trialsEndingSoon? }. Segments the
+ * source doesn't send are left out; any remainder of `total` shows as "other"
+ * (or "no plan" when free/inactive aren't reported).
+ */
 function drawSplit(box, s) {
   if (!box) return;
-  if (!s || (s.paid == null && s.trialing == null)) { box.innerHTML = ''; return; }
-  const paid = s.paid || 0, trial = s.trialing || 0;
-  const none = s.total != null && s.total > paid + trial ? s.total - paid - trial : 0;
-  const tot = paid + trial + none || 1;
-  if (!box.querySelector('.split-bar')) {
-    box.innerHTML = `<div class="split-bar" role="img"><i class="paid"></i><i class="trial"></i><i class="none"></i></div>
-      <div class="split-legend"><span><i class="paid"></i><b class="sp-paid">—</b> paid</span><span><i class="trial"></i><b class="sp-trial">—</b> trial</span><span class="sp-none-wrap"><i class="none"></i><b class="sp-none">—</b> no plan</span><span class="muted sp-ending"></span></div>`;
+  if (!s || (s.paid == null && s.trialing == null)) { box.innerHTML = ''; box.__sig = ''; return; }
+  const segs = [
+    { k: 'paid', label: 'paid', v: s.paid },
+    { k: 'trial', label: 'trial', v: s.trialing },
+    { k: 'free', label: 'free', v: s.free },
+    { k: 'inactive', label: 'inactive', v: s.inactive },
+  ].filter((x) => x.v != null);
+  const known = segs.reduce((t, x) => t + (x.v || 0), 0);
+  const rest = s.total != null && s.total > known ? s.total - known : 0;
+  if (rest) segs.push({ k: 'none', label: s.free == null && s.inactive == null ? 'no plan' : 'other', v: rest });
+  const tot = segs.reduce((t, x) => t + x.v, 0) || 1;
+  const sig = segs.map((x) => x.k + x.label).join('|');
+  if (box.__sig !== sig) {
+    box.innerHTML = `<div class="split-bar" role="img">${segs.map((x) => `<i class="${x.k}"></i>`).join('')}</div>
+      <div class="split-legend">${segs.map((x) => `<span><i class="${x.k}"></i><b class="sp-${x.k}">—</b> ${x.label}</span>`).join('')}<span class="muted sp-ending"></span></div>`;
+    box.__sig = sig;
   }
-  box.querySelector('.split-bar').setAttribute('aria-label', `${paid} paid, ${trial} on trial${none ? `, ${none} with no plan` : ''}`);
-  box.querySelector('.sp-none-wrap').hidden = !none;
-  requestAnimationFrame(() => {
-    box.querySelector('.split-bar .paid').style.width = `${(paid / tot) * 100}%`;
-    box.querySelector('.split-bar .trial').style.width = `${(trial / tot) * 100}%`;
-    box.querySelector('.split-bar .none').style.width = `${(none / tot) * 100}%`;
-  });
-  countUp(box.querySelector('.sp-paid'), s.paid);
-  countUp(box.querySelector('.sp-trial'), s.trialing);
-  countUp(box.querySelector('.sp-none'), none);
+  box.querySelector('.split-bar').setAttribute('aria-label', segs.map((x) => `${x.v} ${x.label}`).join(', '));
+  requestAnimationFrame(() => segs.forEach((x) => { box.querySelector(`.split-bar .${x.k}`).style.width = `${(x.v / tot) * 100}%`; }));
+  segs.forEach((x) => countUp(box.querySelector(`.sp-${x.k}`), x.v));
   box.querySelector('.sp-ending').textContent = s.trialsEndingSoon ? `${int(s.trialsEndingSoon)} trials ending ≤3 days` : '';
 }
 
@@ -427,8 +435,8 @@ function renderOverview(el) {
     countUp($('#ac-stu', el), ac.students);
     $('#ac-par-n', el).textContent = ac.parentsNewToday ? `+${int(ac.parentsNewToday)} today` : '';
     $('#ac-stu-n', el).textContent = ac.studentsNewToday ? `+${int(ac.studentsNewToday)} today` : '';
-    drawSplit($('#ac-par-split', el), { paid: ac.parentsPaid, trialing: ac.parentsTrialing, total: ac.parents });
-    drawSplit($('#ac-stu-split', el), { paid: ac.studentsPaid, trialing: ac.studentsTrialing, total: ac.students });
+    drawSplit($('#ac-par-split', el), { paid: ac.parentsPaid, trialing: ac.parentsTrialing, free: ac.parentsFree, inactive: ac.parentsInactive, total: ac.parents });
+    drawSplit($('#ac-stu-split', el), { paid: ac.studentsPaid, trialing: ac.studentsTrialing, free: ac.studentsFree, inactive: ac.studentsInactive, total: ac.students });
     const missing = ac.parents == null && ac.students == null;
     $('#ac-hint', el).hidden = !missing || snap.sources?.stats?.state === 'demo';
     const ratio = ac.parents && ac.students != null ? ac.students / ac.parents : null;

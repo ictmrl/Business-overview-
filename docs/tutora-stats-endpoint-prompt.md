@@ -31,6 +31,10 @@ for the last 30 days, with dates as "YYYY-MM-DD".
     "parentsTrialing": 0,    // parents on a trial and not paid
     "studentsPaid": 0,       // students covered by a paid plan
     "studentsTrialing": 0,   // students covered by a trial (and not paid)
+    "parentsFree": 0,        // parents on a free plan
+    "parentsInactive": 0,    // parents whose plan has ended (cancelled/expired/inactive)
+    "studentsFree": 0,
+    "studentsInactive": 0,
     "parentsNewToday": 0,
     "studentsNewToday": 0
   },

@@ -81,7 +81,7 @@ export function demoStats() {
         return { name, value: history.reduce((t, d) => t + d.value, 0), today: history.at(-1).value, history };
       });
   return {
-    accounts: { parents: 1046, students: Math.round(live.subs * 1.18), parentsPaid: 912, parentsTrialing: 71, studentsPaid: Math.round(live.subs * 1.18) - 112, studentsTrialing: 97, parentsNewToday: Math.round(dayFrac * 6) + 1, studentsNewToday: Math.round(dayFrac * 9) + 1 },
+    accounts: { parents: 1046, students: Math.round(live.subs * 1.18), parentsPaid: 912, parentsTrialing: 71, parentsFree: 38, parentsInactive: 25, studentsPaid: Math.round(live.subs * 1.18) - 112, studentsTrialing: 97, studentsFree: 9, studentsInactive: 6, parentsNewToday: Math.round(dayFrac * 6) + 1, studentsNewToday: Math.round(dayFrac * 9) + 1 },
     subscribers: { total: live.subs, paid: live.subs - 86, trialing: 86, trialsEndingSoon: 19, newToday: Math.round(dayFrac * 14) + 2, newTrialsToday: Math.round(dayFrac * 9) + 1, churnRate: 2.1, history: subsHist },
     active: { live: Math.round(byHour[hour] / 6 + rnd(0, 8)), today: activeToday, todayStudents: Math.round(activeToday * 0.82), todayParents: activeToday - Math.round(activeToday * 0.82), week: 2140, month: 3310, history: activeHist },
     usage: { sessionsToday, minutesToday: Math.round(sessionsToday * 23.4), avgSessionMinutes: 23.4, history: usageHist, byHour },

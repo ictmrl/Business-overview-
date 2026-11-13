@@ -463,3 +463,7 @@ details.queries summary { cursor: pointer; color: var(--text-2); margin: 6px 0 1
 .open-tile.ok .v, .open-tile.ok .open-note, .open-hero.ok .v, .open-hero.ok .open-note { color: var(--good-text); }
 .open-hero.alert::after { background: var(--critical); }
 .open-hero.ok::after { background: var(--good); }
+
+.split .free { background: var(--series-3); }
+.split .inactive { background: var(--muted); }
+.split-legend i.none, .split-bar i.none { background: var(--muted); opacity: .35; }

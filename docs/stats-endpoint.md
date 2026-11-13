@@ -20,6 +20,10 @@ arrays are daily, oldest first, ideally the last 30 days.
     "parentsTrialing": 71,  // parents on a trial (and not paid)
     "studentsPaid": 1404,   // students covered by a paid plan
     "studentsTrialing": 97,
+    "parentsFree": 38,      // parents on a free plan
+    "parentsInactive": 25,  // parents whose plan has ended (cancelled/expired/inactive)
+    "studentsFree": 9,
+    "studentsInactive": 6,
     "parentsNewToday": 4,
     "studentsNewToday": 6
   },
