@@ -84,7 +84,15 @@ async function collect() {
 
   // Revenue from Stripe overrides the stats source.
   if (s.stripe.secretKey) {
-    try { const r = await fetchStripe(s.stripe); out.revenue = { ...(out.revenue || {}), ...r }; out.sources.stripe = sourceStatus('live'); }
+    try {
+      const { payingSubscribers, trialingSubscribers, trialsEndingSoon, newTrialsToday, ...r } = await fetchStripe(s.stripe);
+      out.revenue = { ...(out.revenue || {}), ...r };
+      // Stripe fills in any subscriber counts the business data source didn't provide.
+      const fromStripe = { paid: payingSubscribers, trialing: trialingSubscribers, total: payingSubscribers + trialingSubscribers, trialsEndingSoon, newTrialsToday };
+      const own = Object.fromEntries(Object.entries(out.subscribers || {}).filter(([, v]) => v != null));
+      out.subscribers = { history: [], ...fromStripe, ...own };
+      out.sources.stripe = sourceStatus('live');
+    }
     catch (e) { out.sources.stripe = sourceStatus('error', e.message); }
   } else out.sources.stripe = sourceStatus('off');
   if (out.revenue && !out.revenue.currency) out.revenue.currency = s.general.currency;
@@ -174,8 +182,9 @@ api.post('/settings/:section/test', async (req, res) => {
     else if (section === 'stats') {
       const r = await fetchStats(cfg);
       const found = ['subscribers', 'active', 'usage', 'revenue', 'ai'].filter((k) => r[k]);
-      message = `Connected — received ${found.join(', ') || 'no recognised sections'}` + (r._queryErrors ? `. Query errors: ${Object.entries(r._queryErrors).map(([k, v]) => `${k}: ${v}`).join('; ')}` : '');
-    } else if (section === 'stripe') { resetStripeCache(); const r = await fetchStripe(cfg); message = `Connected — MRR ${r.currency} ${r.mrr.toFixed(2)}, ${r.payingSubscribers} active subscriptions`; resetStripeCache(); }
+      const sb = r.subscribers || {};
+      message = `Connected — received ${found.join(', ') || 'no recognised sections'}. Subscribers: ${sb.total ?? '—'} total (${sb.paid ?? '—'} paid, ${sb.trialing ?? '—'} on trial)` + (r._queryErrors ? `. Query errors: ${Object.entries(r._queryErrors).map(([k, v]) => `${k}: ${v}`).join('; ')}` : '');
+    } else if (section === 'stripe') { resetStripeCache(); const r = await fetchStripe(cfg); message = `Connected — MRR ${r.currency} ${r.mrr.toFixed(2)}, ${r.payingSubscribers} paying and ${r.trialingSubscribers} trialing subscriptions`; resetStripeCache(); }
     else if (section === 'email') message = await mail.testEmail(cfg);
     else if (section === 'uptime') { const urls = parseUrls(cfg.urls); await checkAll(urls); message = `Checked ${urls.length} URLs`; }
     else throw new Error('Nothing to test');

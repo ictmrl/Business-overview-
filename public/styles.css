@@ -219,7 +219,18 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .delta { display: inline-flex; align-items: center; gap: 3px; font-weight: 600; font-size: 12.5px; padding: 2px 7px; border-radius: 999px; }
 .delta.up { color: var(--good-text); background: color-mix(in srgb, var(--good) 14%, transparent); }
 .delta.down { color: var(--bad-text); background: color-mix(in srgb, var(--critical) 14%, transparent); }
-.hero .spark-wrap { margin: 12px -20px -20px; height: 46px; color: var(--c); }
+.hero { display: flex; flex-direction: column; }
+.hero .spark-wrap { margin: auto -20px -20px; padding-top: 12px; height: 58px; color: var(--c); }
+.split { display: grid; gap: 7px; margin: 2px 0 10px; }
+.split:empty { display: none; }
+.split-bar { display: flex; gap: 2px; height: 6px; }
+.split-bar i { display: block; width: 0; height: 100%; border-radius: 3px; transition: width 1.1s cubic-bezier(.2,.8,.2,1); }
+.split .paid { background: var(--series-1); }
+.split .trial { background: var(--series-2); }
+.split-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--text-2); }
+.split-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.split-legend i { width: 8px; height: 8px; border-radius: 2px; }
+.split-legend b { color: var(--text); font-weight: 650; }
 .bump { animation: bump .5s ease; }
 @keyframes bump { 40% { transform: scale(1.04); filter: brightness(1.3); } }
 
@@ -227,6 +238,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; }
 .mini { padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
 .mini .k { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.acc-sub { font-size: 11.5px; margin-top: 2px; min-height: 16px; }
 .mini .v { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; margin-top: 2px; }
 
 /* Segmented control */
@@ -295,7 +307,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .ustrip i.none { background: var(--surface-2); }
 
 /* Status pills (icon + label, never colour alone) */
-.status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+.status { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex: none; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
 .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .status.good { color: var(--good-text); background: color-mix(in srgb, var(--good) 14%, transparent); }
 .status.good::before { animation: pulse 2.4s infinite; background: var(--good); }

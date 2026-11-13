@@ -13,10 +13,19 @@ arrays are daily, oldest first, ideally the last 30 days.
 
 ```jsonc
 {
+  "accounts": {
+    "parents": 1046,        // parent / account-holder users
+    "students": 1515,       // child / student profiles
+    "parentsNewToday": 4,
+    "studentsNewToday": 6
+  },
   "subscribers": {
-    "total": 1284,          // active + trialing subscriptions
+    "paid": 1198,           // active, paying subscriptions
+    "trialing": 86,         // on a free trial
+    "total": 1284,          // optional: defaults to paid + trialing
+    "trialsEndingSoon": 19, // trials ending within 3 days
     "newToday": 16,
-    "trialing": 86,
+    "newTrialsToday": 7,
     "churnRate": 2.1,       // % over the last 30 days
     "history": [{ "date": "2026-10-14", "value": 1010 }]
   },
@@ -61,7 +70,14 @@ arrays are daily, oldest first, ideally the last 30 days.
 }
 ```
 
-The dashboard also accepts a few alternative names: `activeCustomers` for
+The overview's **Accounts** card shows parents, students, students per parent,
+and subscriptions per parent. When subscriptions per parent roughly matches
+students per parent, the card notes that subscriptions look like they're
+counted **per child**, which is why the subscriber total can be higher than
+your number of families.
+
+The dashboard also accepts a few alternative names: `families` / `children`
+for `parents` / `students`, `activeCustomers` for
 `active`, `aiChallenges` for `ai`, `daily/weekly/monthly` for
 `today/week/month`, and `count` / `subject` / `level` in the breakdown arrays.
 
@@ -100,11 +116,21 @@ want on screen.
 
 ## Or skip the endpoint: direct Postgres
 
+If Stripe is connected, any subscriber counts this endpoint leaves out
+(`paid`, `trialing`, `trialsEndingSoon`, `newTrialsToday`) are filled in from
+Stripe's active and trialing subscriptions.
+
 Choose **Railway Postgres (direct SQL)** instead and paste the database's
 `DATABASE_PUBLIC_URL`. Each metric is a SQL query you can edit under
 *Edit SQL queries*. Single numbers return a `value` column, history returns
 `date` + `value` rows, and `usageByHour` returns `hour` + `value`. Use
-**Test connection** to see which queries fail against your schema. A read-only
+**Test connection** to see which queries fail against your schema. Failing
+queries also show up in a banner on the overview, and their panels show "—"
+instead of 0. Subscribers are counted with `subscribersPaid` and
+`subscribersTrialing` (the total is their sum unless you fill in
+`subscribersTotal`). If trials live on your users table rather than in
+`subscriptions`, point `subscribersTrialing` there, for example
+`SELECT count(*)::int AS value FROM users WHERE trial_ends_at > now()`. A read-only
 Postgres role is strongly recommended:
 
 ```sql

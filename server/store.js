@@ -58,9 +58,17 @@ export const DEFAULT_SETTINGS = {
     databaseUrl: '',
     databaseSsl: true,
     queries: {
-      subscribersTotal: "SELECT count(*)::int AS value FROM subscriptions WHERE status IN ('active','trialing')",
-      subscribersNewToday: "SELECT count(*)::int AS value FROM subscriptions WHERE created_at >= date_trunc('day', now())",
-      subscribersHistory: "SELECT to_char(d, 'YYYY-MM-DD') AS date, (SELECT count(*) FROM subscriptions s WHERE s.created_at < d + interval '1 day' AND (s.canceled_at IS NULL OR s.canceled_at >= d + interval '1 day'))::int AS value FROM generate_series(date_trunc('day', now()) - interval '29 days', date_trunc('day', now()), interval '1 day') d ORDER BY d",
+      subscribersPaid: "SELECT count(*)::int AS value FROM subscriptions WHERE status = 'active'",
+      subscribersTrialing: "SELECT count(*)::int AS value FROM subscriptions WHERE status = 'trialing'",
+      subscribersNewTrialsToday: "SELECT count(*)::int AS value FROM subscriptions WHERE status = 'trialing' AND created_at >= date_trunc('day', now())",
+      trialsEndingSoon: "SELECT count(*)::int AS value FROM subscriptions WHERE status = 'trialing' AND trial_end BETWEEN now() AND now() + interval '3 days'",
+      subscribersTotal: "",
+      subscribersNewToday: "SELECT count(*)::int AS value FROM subscriptions WHERE status NOT IN ('incomplete','incomplete_expired') AND created_at >= date_trunc('day', now())",
+      subscribersHistory: "SELECT to_char(d, 'YYYY-MM-DD') AS date, (SELECT count(*) FROM subscriptions s WHERE s.status NOT IN ('incomplete','incomplete_expired') AND s.created_at < d + interval '1 day' AND (s.canceled_at IS NULL OR s.canceled_at >= d + interval '1 day'))::int AS value FROM generate_series(date_trunc('day', now()) - interval '29 days', date_trunc('day', now()), interval '1 day') d ORDER BY d",
+      parentsTotal: "SELECT count(*)::int AS value FROM users WHERE role = 'parent'",
+      studentsTotal: "SELECT count(*)::int AS value FROM users WHERE role = 'student'",
+      parentsNewToday: "SELECT count(*)::int AS value FROM users WHERE role = 'parent' AND created_at >= date_trunc('day', now())",
+      studentsNewToday: "SELECT count(*)::int AS value FROM users WHERE role = 'student' AND created_at >= date_trunc('day', now())",
       activeToday: "SELECT count(DISTINCT user_id)::int AS value FROM sessions WHERE created_at >= date_trunc('day', now())",
       activeWeek: "SELECT count(DISTINCT user_id)::int AS value FROM sessions WHERE created_at >= now() - interval '7 days'",
       activeMonth: "SELECT count(DISTINCT user_id)::int AS value FROM sessions WHERE created_at >= now() - interval '30 days'",
@@ -100,6 +108,19 @@ try {
   state = deepMerge(DEFAULT_STATE, JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')));
 } catch {
   state = structuredClone(DEFAULT_STATE);
+}
+
+// Upgrade saved SQL that still matches an earlier built-in default (leaves edited queries alone).
+const OLD_DEFAULT_QUERIES = {
+  subscribersTotal: ["SELECT count(*)::int AS value FROM subscriptions WHERE status IN ('active','trialing')"],
+  subscribersNewToday: ["SELECT count(*)::int AS value FROM subscriptions WHERE created_at >= date_trunc('day', now())"],
+  subscribersHistory: ["SELECT to_char(d, 'YYYY-MM-DD') AS date, (SELECT count(*) FROM subscriptions s WHERE s.created_at < d + interval '1 day' AND (s.canceled_at IS NULL OR s.canceled_at >= d + interval '1 day'))::int AS value FROM generate_series(date_trunc('day', now()) - interval '29 days', date_trunc('day', now()), interval '1 day') d ORDER BY d"],
+};
+{
+  const q = state.settings.stats.queries;
+  for (const [k, olds] of Object.entries(OLD_DEFAULT_QUERIES)) {
+    if (olds.includes(q[k])) q[k] = DEFAULT_SETTINGS.stats.queries[k];
+  }
 }
 
 let saveTimer;

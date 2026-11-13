@@ -78,7 +78,8 @@ export function demoStats() {
   const levels = { KS2: 1820, KS3: 3940, GCSE: 8610, 'A-Level': 4050 };
 
   return {
-    subscribers: { total: live.subs, newToday: Math.round(dayFrac * 14) + 2, trialing: 86, churnRate: 2.1, history: subsHist },
+    accounts: { parents: 1046, students: Math.round(live.subs * 1.18), parentsNewToday: Math.round(dayFrac * 6) + 1, studentsNewToday: Math.round(dayFrac * 9) + 1 },
+    subscribers: { total: live.subs, paid: live.subs - 86, trialing: 86, trialsEndingSoon: 19, newToday: Math.round(dayFrac * 14) + 2, newTrialsToday: Math.round(dayFrac * 9) + 1, churnRate: 2.1, history: subsHist },
     active: { live: Math.round(byHour[hour] / 6 + rnd(0, 8)), today: activeToday, week: 2140, month: 3310, history: activeHist },
     usage: { sessionsToday, minutesToday: Math.round(sessionsToday * 23.4), avgSessionMinutes: 23.4, history: usageHist, byHour },
     revenue: { currency: 'GBP', mrr: Math.round(live.subs * 11.4), today: Math.round(revHist.at(-1).value * dayFrac), month: Math.round(revHist.slice(-new Date().getDate()).reduce((a, b) => a + b.value, 0)), history: revHist },

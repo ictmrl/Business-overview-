@@ -256,9 +256,30 @@ function demoBanner(snap) {
   const demo = Object.entries(snap.sources || {}).filter(([, s]) => s.state === 'demo').length;
   const errs = Object.entries(snap.sources || {}).filter(([, s]) => s.state === 'error');
   if (errs.length) return `<div class="banner warn"><span class="status critical">Connection issue</span><span>${errs.map(([k, s]) => `<b>${esc(k)}</b>: ${esc(s.message)}`).join(' · ')}</span><a href="#settings" style="margin-left:auto">Fix in Settings →</a></div>`;
+  const qe = Object.entries(snap.queryErrors || {});
+  if (qe.length) return `<div class="banner warn"><span class="status warning">${qe.length} ${qe.length === 1 ? 'query' : 'queries'} failed</span><span>These panels show “—” until the SQL matches your schema: ${qe.map(([k, v]) => `<b title="${esc(v)}">${esc(k)}</b>`).join(', ')}. <span class="muted">${esc(qe[0][1])}</span></span><a href="#settings" style="margin-left:auto;white-space:nowrap">Edit queries →</a></div>`;
   if (demo) return `<div class="banner"><span class="status demo">Demo data</span><span>Some panels are showing sample data. Connect Railway, your stats source and IMAP in <a href="#settings">Settings</a> to go live.</span></div>`;
   return '';
 }
+/** Paid vs trial split: a two-segment bar plus labelled counts (never colour alone). */
+function drawSplit(box, s) {
+  if (!box) return;
+  if (!s || (s.paid == null && s.trialing == null)) { box.innerHTML = ''; return; }
+  const paid = s.paid || 0, trial = s.trialing || 0, tot = paid + trial || 1;
+  if (!box.querySelector('.split-bar')) {
+    box.innerHTML = `<div class="split-bar" role="img"><i class="paid"></i><i class="trial"></i></div>
+      <div class="split-legend"><span><i class="paid"></i><b class="sp-paid">—</b> paid</span><span><i class="trial"></i><b class="sp-trial">—</b> on trial</span><span class="muted sp-ending"></span></div>`;
+  }
+  box.querySelector('.split-bar').setAttribute('aria-label', `${paid} paid, ${trial} on trial`);
+  requestAnimationFrame(() => {
+    box.querySelector('.split-bar .paid').style.width = `${(paid / tot) * 100}%`;
+    box.querySelector('.split-bar .trial').style.width = `${(trial / tot) * 100}%`;
+  });
+  countUp(box.querySelector('.sp-paid'), s.paid);
+  countUp(box.querySelector('.sp-trial'), s.trialing);
+  box.querySelector('.sp-ending').textContent = s.trialsEndingSoon ? `${int(s.trialsEndingSoon)} trials ending ≤3 days` : '';
+}
+
 const serviceStatus = (s) => {
   const ok = ['SUCCESS'], warn = ['BUILDING', 'DEPLOYING', 'INITIALIZING', 'QUEUED', 'WAITING', 'SLEEPING'];
   if (ok.includes(s)) return ['good', 'Healthy'];
@@ -274,10 +295,19 @@ function renderOverview(el) {
   el.innerHTML = `<div class="view">
     <div id="ov-banner"></div>
     <div class="grid g-4">
-      <button class="card hero lead" data-metric="subscribers" style="--c:var(--series-1)"><div class="label"><i>${I.users}</i>Subscribers</div><div class="value" id="h-subs">—</div><div class="meta" id="h-subs-m"></div><div class="spark-wrap" id="h-subs-s"></div></button>
+      <button class="card hero lead" data-metric="subscribers" style="--c:var(--series-1)"><div class="label"><i>${I.users}</i>Subscribers <span class="muted" style="font-weight:400">paid + trial</span></div><div class="value" id="h-subs">—</div><div class="split" id="h-subs-split"></div><div class="meta" id="h-subs-m"></div><div class="spark-wrap" id="h-subs-s"></div></button>
       <button class="card hero" data-metric="active" style="--c:var(--series-3)"><div class="label"><i>${I.activity}</i>Active customers today</div><div class="value" id="h-act">—</div><div class="meta" id="h-act-m"></div><div class="spark-wrap" id="h-act-s"></div></button>
       <button class="card hero" data-metric="revenue" style="--c:var(--series-7)"><div class="label"><i>${I.pound}</i>Monthly recurring revenue</div><div class="value" id="h-mrr">—</div><div class="meta" id="h-mrr-m"></div><div class="spark-wrap" id="h-mrr-s"></div></button>
       <button class="card hero" data-metric="uptime" style="--c:var(--series-4)"><div class="label"><i>${I.shield}</i>Uptime (24h)</div><div class="value" id="h-up">—</div><div class="meta" id="h-up-m"></div><div class="spark-wrap" id="h-up-s" style="padding:8px 20px 14px;height:auto"></div></button>
+    </div>
+    <div class="card" id="accounts-card">
+      <div class="card-head"><h3>Accounts</h3><span class="sub">who's signed up</span></div>
+      <div class="grid g-4" style="gap:12px">
+        <div class="mini"><div class="k">Parents</div><div class="v" id="ac-par">—</div><div class="muted acc-sub" id="ac-par-n"></div></div>
+        <div class="mini"><div class="k">Students</div><div class="v" id="ac-stu">—</div><div class="muted acc-sub" id="ac-stu-n"></div></div>
+        <div class="mini"><div class="k">Students per parent</div><div class="v" id="ac-ratio">—</div><div class="muted acc-sub">average family size</div></div>
+        <div class="mini"><div class="k">Subscriptions per parent</div><div class="v" id="ac-subs">—</div><div class="muted acc-sub" id="ac-subs-n"></div></div>
+      </div>
     </div>
     <div class="grid g-main">
       <div class="card">
@@ -288,9 +318,10 @@ function renderOverview(el) {
       <div class="card">
         <div class="card-head"><h3>Today</h3><span class="sub">sessions by hour</span></div>
         <div class="chart-box sm" id="hours"></div>
-        <div class="stats-row" style="margin-top:14px">
+        <div class="stats-row" style="margin-top:14px;grid-template-columns:repeat(2,minmax(0,1fr))">
           <div class="mini"><div class="k">Sessions</div><div class="v" id="t-sess">—</div></div>
           <div class="mini"><div class="k">New subs</div><div class="v" id="t-new">—</div></div>
+          <div class="mini"><div class="k">New trials</div><div class="v" id="t-trials">—</div></div>
           <div class="mini"><div class="k">Revenue</div><div class="v" id="t-rev">—</div></div>
         </div>
       </div>
@@ -350,6 +381,20 @@ function renderOverview(el) {
     first = false;
   }
 
+  function drawAccounts(snap) {
+    const ac = snap.accounts || {}, subs = snap.subscribers?.total;
+    countUp($('#ac-par', el), ac.parents);
+    countUp($('#ac-stu', el), ac.students);
+    $('#ac-par-n', el).textContent = ac.parentsNewToday != null ? `+${int(ac.parentsNewToday)} today` : '';
+    $('#ac-stu-n', el).textContent = ac.studentsNewToday != null ? `+${int(ac.studentsNewToday)} today` : '';
+    const ratio = ac.parents && ac.students != null ? ac.students / ac.parents : null;
+    const perParent = ac.parents && subs != null ? subs / ac.parents : null;
+    countUp($('#ac-ratio', el), ratio, (n) => n.toFixed(2));
+    countUp($('#ac-subs', el), perParent, (n) => n.toFixed(2));
+    // If subscriptions per parent tracks students per parent, subscriptions are counted per child.
+    $('#ac-subs-n', el).textContent = ratio && perParent ? (Math.abs(perParent - ratio) / ratio < 0.15 ? 'looks like one per child' : perParent <= 1.15 ? 'looks like one per family' : '') : '';
+  }
+
   function update(snap, why) {
     $('#ov-banner', el).innerHTML = demoBanner(snap);
     $('#chips', el).innerHTML = sourceChips(snap);
@@ -358,21 +403,24 @@ function renderOverview(el) {
 
     if (why !== 'uptime') {
       countUp($('#h-subs', el), snap.subscribers?.total);
-      $('#h-subs-m', el).innerHTML = deltaHtml(delta(snap.subscribers?.history)) + (snap.subscribers?.newToday != null ? `<span>· +${int(snap.subscribers.newToday)} today</span>` : '');
+      $('#h-subs-m', el).innerHTML = deltaHtml(delta(snap.subscribers?.history)) + (snap.subscribers?.newToday != null ? `<span>${delta(snap.subscribers?.history) != null ? '· ' : ''}+${int(snap.subscribers.newToday)} today</span>` : '');
       sparkline($('#h-subs-s', el), (snap.subscribers?.history || []).map((d) => d.value), { color: 'var(--series-1)', animate: isInit });
+      drawSplit($('#h-subs-split', el), snap.subscribers);
       countUp($('#h-act', el), snap.active?.today);
-      $('#h-act-m', el).innerHTML = deltaHtml(delta(snap.active?.history)) + (snap.active?.live != null ? `<span>· ${int(snap.active.live)} online now</span>` : '');
+      $('#h-act-m', el).innerHTML = deltaHtml(delta(snap.active?.history?.slice(0, -1)), 'yesterday vs 30d') + (snap.active?.live != null ? `<span>${delta(snap.active?.history?.slice(0, -1)) != null ? '· ' : ''}${int(snap.active.live)} online now</span>` : '');
       sparkline($('#h-act-s', el), (snap.active?.history || []).map((d) => d.value), { color: 'var(--series-3)', animate: isInit });
       countUp($('#h-mrr', el), snap.revenue?.mrr, (n) => money(n, cur));
       $('#h-mrr-m', el).innerHTML = snap.revenue ? `<span>${money(snap.revenue.month, cur)} this month</span>` : '';
       sparkline($('#h-mrr-s', el), (snap.revenue?.history || []).map((d) => d.value), { color: 'var(--series-7)', animate: isInit });
 
+      drawAccounts(snap);
       drawMain(snap);
       const byHour = snap.usage?.byHour;
       if (byHour?.length) barChart($('#hours', el), byHour, byHour.map((_, h) => String(h).padStart(2, '0')), { color: 'var(--series-1)', highlight: new Date().getHours(), tipLabel: (h) => `${String(h).padStart(2, '0')}:00–${String(h + 1).padStart(2, '0')}:00`, animate: isInit, label: 'Sessions by hour today' });
       else $('#hours', el).innerHTML = '<div class="empty">No hourly data</div>';
       countUp($('#t-sess', el), snap.usage?.sessionsToday);
       countUp($('#t-new', el), snap.subscribers?.newToday);
+      countUp($('#t-trials', el), snap.subscribers?.newTrialsToday);
       countUp($('#t-rev', el), snap.revenue?.today, (n) => money(n, cur));
 
       // AI
@@ -464,7 +512,7 @@ function renderAI(el) {
     else if (!lv.length) $('#a-level', el).innerHTML = '<div class="empty">No level breakdown provided</div>';
     const daysSoFar = Math.max(0.05, (Date.now() - new Date().setHours(0, 0, 0, 0)) / 86_400_000);
     $('#a-mini', el).innerHTML = `
-      <div class="mini"><div class="k">Pace today</div><div class="v">${int(ai.today / daysSoFar)}</div><div class="muted" style="font-size:11.5px">projected/day</div></div>
+      <div class="mini"><div class="k">Pace today</div><div class="v">${ai.today != null ? int(ai.today / daysSoFar) : '—'}</div><div class="muted" style="font-size:11.5px">projected/day</div></div>
       <div class="mini"><div class="k">Top subject</div><div class="v" style="font-size:17px">${esc(ai.bySubject?.[0]?.name || '—')}</div></div>
       <div class="mini"><div class="k">Subjects</div><div class="v">${(ai.bySubject || []).length}</div></div>`;
     const q = $('#a-q', el).value.trim().toLowerCase();

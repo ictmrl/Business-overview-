@@ -34,8 +34,9 @@ export async function fetchStripe(cfg) {
   if (cache.data && Date.now() - cache.at < 5 * 60_000) return cache.data;
   const key = cfg.secretKey;
   const since = Math.floor((Date.now() - 30 * 86_400_000) / 1000);
-  const [subs, charges] = await Promise.all([
+  const [subs, trials, charges] = await Promise.all([
     list(key, 'subscriptions', { status: 'active' }, 5000),
+    list(key, 'subscriptions', { status: 'trialing' }, 5000),
     list(key, 'charges', { 'created[gte]': String(since) }, 5000),
   ]);
   let mrr = 0, currency;
@@ -57,6 +58,9 @@ export async function fetchStripe(cfg) {
     month: Math.round(history.filter((h) => h.date.startsWith(monthKey)).reduce((a, b) => a + b.value, 0) * 100) / 100,
     history,
     payingSubscribers: subs.length,
+    trialingSubscribers: trials.length,
+    trialsEndingSoon: trials.filter((t) => t.trial_end && t.trial_end * 1000 - Date.now() < 3 * 86_400_000).length,
+    newTrialsToday: trials.filter((t) => new Date(t.created * 1000).toDateString() === new Date().toDateString()).length,
   };
   cache = { at: Date.now(), data };
   return data;
