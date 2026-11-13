@@ -65,3 +65,31 @@ export async function testRailway(cfg) {
   const r = await fetchRailway(cfg);
   return `Connected to “${r.project}” (${r.environment}) — ${r.services.length} services`;
 }
+
+/**
+ * Find the Postgres connection string in the Railway project: looks through each
+ * service's variables for DATABASE_PUBLIC_URL (reachable from outside Railway).
+ * Returns { url, service } — the URL stays on the server.
+ */
+export async function findDatabaseUrl(cfg) {
+  const data = await gql(cfg, `query($id: String!) {
+    project(id: $id) { environments { edges { node { id name } } } services { edges { node { id name } } } }
+  }`, { id: cfg.projectId });
+  const envs = data.project.environments.edges.map((e) => e.node);
+  const env = envs.find((e) => e.id === cfg.environmentId) || envs.find((e) => e.name === 'production') || envs[0];
+  const services = data.project.services.edges.map((e) => e.node);
+  // Check likely database services first.
+  services.sort((a, b) => Number(/postgres|db|database/i.test(b.name)) - Number(/postgres|db|database/i.test(a.name)));
+  let internalOnly = null;
+  for (const s of services) {
+    let vars;
+    try {
+      vars = (await gql(cfg, `query($p: String!, $e: String!, $s: String!) { variables(projectId: $p, environmentId: $e, serviceId: $s) }`,
+        { p: cfg.projectId, e: env.id, s: s.id })).variables || {};
+    } catch { continue; }
+    if (vars.DATABASE_PUBLIC_URL) return { url: vars.DATABASE_PUBLIC_URL, service: s.name, environment: env.name };
+    if (vars.DATABASE_URL && !internalOnly) internalOnly = s.name;
+  }
+  if (internalOnly) throw new Error(`“${internalOnly}” only has an internal DATABASE_URL. In Railway, open that Postgres service → Settings → Networking and enable the TCP proxy (public networking), then try again.`);
+  throw new Error(`No DATABASE_PUBLIC_URL found in any service in the “${env.name}” environment`);
+}

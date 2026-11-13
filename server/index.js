@@ -8,7 +8,7 @@ import { authRouter, requireAuth } from './auth.js';
 import { getSettings, getPublicSettings, updateSection, DATA_DIR, SECRET_FIELDS, getState, save } from './store.js';
 import { demoStats, demoInfra, demoMail } from './sources/demo.js';
 import { fetchStats, statsConfigured, detectSchema } from './sources/stats.js';
-import { fetchRailway, railwayConfigured, testRailway } from './sources/railway.js';
+import { fetchRailway, railwayConfigured, testRailway, findDatabaseUrl } from './sources/railway.js';
 import { fetchStripe, resetStripeCache } from './sources/stripe.js';
 import { startUptime, uptimeSnapshot, checkAll, parseUrls } from './sources/uptime.js';
 import * as mail from './sources/email.js';
@@ -180,6 +180,7 @@ api.get('/stream', (req, res) => {
 api.get('/settings', (req, res) => res.json({ settings: getPublicSettings(), dataDir: DATA_DIR }));
 api.put('/settings/:section', async (req, res) => {
   try {
+    if (req.params.section === 'stats' && req.body?.databaseUrl && req.body.databaseUrl !== '__SET__') checkDbUrl(req.body.databaseUrl);
     updateSection(req.params.section, req.body);
     if (req.params.section === 'email') await mail.disconnectEmail();
     if (req.params.section === 'stripe') resetStripeCache();
@@ -198,10 +199,29 @@ function merged(section, body) {
   }
   return out;
 }
+// Railway's DATABASE_URL uses a private hostname that only works inside Railway.
+function checkDbUrl(url) {
+  if (/\.railway\.internal\b/i.test(url)) throw new Error('That’s the internal DATABASE_URL (…railway.internal), which only works inside Railway. Use DATABASE_PUBLIC_URL instead — or press “Fetch from Railway”.');
+  if (!/^postgres(ql)?:\/\//i.test(url)) throw new Error('The database URL should start with postgresql:// or postgres://');
+}
+
+// Pull DATABASE_PUBLIC_URL from Railway and save it (encrypted). The URL never goes to the browser.
+api.post('/settings/stats/railway-db', async (req, res) => {
+  try {
+    const s = getSettings();
+    if (!railwayConfigured(s.railway)) throw new Error('Connect Railway first (Settings → Railway: token and project ID).');
+    const { url, service, environment } = await findDatabaseUrl(s.railway);
+    updateSection('stats', { mode: 'postgres', databaseUrl: url, databaseSsl: true });
+    restartLoop();
+    res.json({ ok: true, message: `Found the database in “${service}” (${environment}) and saved it.`, settings: getPublicSettings() });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 api.post('/settings/stats/detect', async (req, res) => {
   try {
     const cfg = merged('stats', req.body);
-    if (!cfg.databaseUrl) throw new Error('Enter the database URL first');
+    if (!cfg.databaseUrl) throw new Error('No database URL saved yet. Press “Fetch from Railway”, or paste the DATABASE_PUBLIC_URL from your Postgres service’s Variables tab in Railway.');
+    checkDbUrl(cfg.databaseUrl);
     res.json({ ok: true, ...(await detectSchema(cfg)) });
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });

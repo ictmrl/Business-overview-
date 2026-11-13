@@ -692,7 +692,7 @@ const SECTIONS = {
       { k: 'apiBaseUrl', label: 'API base URL', show: (v) => v.mode === 'api' },
       { k: 'apiPath', label: 'Stats path', show: (v) => v.mode === 'api' },
       { k: 'apiToken', label: 'Bearer token', secret: true, full: true, show: (v) => v.mode === 'api', hint: 'See docs/stats-endpoint.md for the JSON shape the endpoint should return.' },
-      { k: 'databaseUrl', label: 'DATABASE_PUBLIC_URL', secret: true, full: true, show: (v) => v.mode === 'postgres', hint: 'From your Postgres service → Variables in Railway. Use a read-only database user if you can.' },
+      { k: 'databaseUrl', label: 'DATABASE_PUBLIC_URL', secret: true, full: true, show: (v) => v.mode === 'postgres', hint: 'Use DATABASE_PUBLIC_URL (not DATABASE_URL) from your Postgres service → Variables in Railway — or press “Fetch from Railway” below if Railway is connected.' },
       { k: 'databaseSsl', label: 'Use SSL', type: 'check', show: (v) => v.mode === 'postgres' },
       { k: 'queries', label: 'SQL queries', type: 'queries', full: true, show: (v) => v.mode === 'postgres' },
     ],
@@ -772,7 +772,7 @@ function renderSettings(el) {
     body.innerHTML = `<div class="card-head"><h3 style="font-size:17px">${esc(def.title)}</h3></div>
       <p class="section-desc">${esc(def.desc)}</p>
       <form id="s-form"><div class="form-grid">${def.fields.map(fieldHtml).join('')}</div>
-      <div class="form-actions"><button class="btn primary" type="submit">Save</button>${def.test ? '<button class="btn" type="button" id="s-test">Test connection</button>' : ''}${section === 'stats' && vals.mode === 'postgres' ? '<button class="btn" type="button" id="s-detect">Detect from database</button>' : ''}<span class="form-msg" id="s-msg"></span></div></form>
+      <div class="form-actions"><button class="btn primary" type="submit">Save</button>${def.test ? '<button class="btn" type="button" id="s-test">Test connection</button>' : ''}${section === 'stats' && vals.mode === 'postgres' ? `${vals.databaseUrl !== '__SET__' ? '<button class="btn" type="button" id="s-fetchdb">Fetch from Railway</button>' : ''}<button class="btn" type="button" id="s-detect">Detect from database</button>` : ''}<span class="form-msg" id="s-msg"></span></div></form>
       <div id="s-detect-out"></div>`;
     const collect = () => {
       const out = {};
@@ -795,6 +795,14 @@ function renderSettings(el) {
       try { const r = await api(`/api/settings/${section}`, { method: 'PUT', body: collect() }); data.settings = r.settings; draw(); toast('Settings saved'); }
       catch (err) { msg.className = 'form-msg error-msg'; msg.textContent = err.message; }
     };
+    $('#s-fetchdb', body)?.addEventListener('click', async () => {
+      msg.className = 'form-msg muted'; msg.textContent = 'Looking for your Postgres service in Railway…';
+      try {
+        const r = await api('/api/settings/stats/railway-db', { body: {} });
+        data.settings = r.settings; draw(); toast(r.message);
+        const m2 = $('#s-msg', body); m2.className = 'form-msg ok-msg'; m2.textContent = '✓ ' + r.message + ' Now press Detect from database.';
+      } catch (err) { msg.className = 'form-msg error-msg'; msg.textContent = '✕ ' + err.message; }
+    });
     $('#s-detect', body)?.addEventListener('click', async () => {
       const out = $('#s-detect-out', body);
       msg.className = 'form-msg muted'; msg.textContent = 'Reading your database schema…';
