@@ -294,25 +294,25 @@ const serviceStatus = (s) => {
   if (s === 'NO_DEPLOYMENT') return ['neutral', 'No deploys'];
   return ['critical', s ? s[0] + s.slice(1).toLowerCase() : 'Unknown'];
 };
-// An AI challenge = a student or parent disputing an answer from the AI tutor.
+// AI challenges: flags raised against AI tutor responses, by type (Response unsure,
+// Content drift, Reported errors, Reversals, Rule breaks, Unsupported claims,
+// Board claims, Verifier findings, Educator).
 function challengeStatus(s) {
   const v = String(s || '');
-  if (!v) return ['neutral', '—', ''];
-  if (/open|pending|new|review|await/i.test(v)) return ['warning', 'Open', 'Waiting for review'];
-  if (/uphe|accept|valid|overturn|ai.?wrong|correct/i.test(v)) return ['critical', 'Upheld', 'Challenge upheld: the AI tutor’s answer was wrong'];
-  if (/reject|dismiss|invalid|declin|ai.?right/i.test(v)) return ['neutral', 'Rejected', 'Challenge rejected: the AI tutor’s answer stood'];
-  if (/resolv|closed|done/i.test(v)) return ['good', 'Resolved', ''];
-  return ['neutral', v, ''];
+  if (!v) return null;
+  if (/open|pending|new|review|await|unresolved/i.test(v)) return ['warning', 'Open'];
+  if (/resolv|closed|done|fixed|dismiss|reject/i.test(v)) return ['good', v[0].toUpperCase() + v.slice(1).toLowerCase()];
+  return ['neutral', v];
 }
 const challengeRow = (c, isNew) => {
-  const [cls, label, tip] = challengeStatus(c.status);
+  const st = challengeStatus(c.status);
   return `<div class="row ${isNew ? 'new' : ''}">
-    ${c.subject ? `<span class="tag">${esc(c.subject)}</span>` : ''}
-    <div class="grow"><div class="title" title="${esc(c.summary)}">${esc(c.summary)}</div><div class="desc">${esc(c.reason || '')}</div></div>
-    <span class="status ${cls}" title="${esc(tip)}">${esc(label)}</span>
+    <span class="tag type-tag">${esc(c.type || 'Other')}</span>
+    <div class="grow"><div class="title" title="${esc(c.summary)}">${esc(c.summary || '—')}</div></div>
+    ${st ? `<span class="status ${st[0]}">${esc(st[1])}</span>` : ''}
     <span class="time">${ago(c.createdAt)}</span></div>`;
 };
-const challengeKey = (c) => c.createdAt + '|' + c.summary;
+const challengeKey = (c) => c.createdAt + '|' + c.type + '|' + c.summary;
 const shortUrl = (u) => u.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
 // ------------------------------------------------------------------ overview
@@ -355,16 +355,13 @@ function renderOverview(el) {
     </div>
     <div class="grid g-3">
       <div class="card">
-        <div class="card-head"><h3>AI challenges</h3><span class="sub">disputed tutor answers</span><div class="right"><a href="#ai" class="btn sm ghost">Details →</a></div></div>
-        <div style="display:flex;gap:18px;align-items:center;margin-bottom:16px">
-          <div class="ring-wrap" id="ai-ring"></div>
-          <div style="display:grid;gap:10px;flex:1">
-            <div class="mini"><div class="k">Today</div><div class="v" id="ai-today">—</div></div>
-            <div class="mini"><div class="k">Open</div><div class="v" id="ai-open">—</div></div>
-          </div>
+        <div class="card-head"><h3>AI challenges</h3><span class="sub">flags on AI tutor responses</span><div class="right"><a href="#ai" class="btn sm ghost">Details →</a></div></div>
+        <div class="stats-row" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:16px">
+          <div class="mini"><div class="k">Today</div><div class="v" id="ai-today">—</div></div>
+          <div class="mini"><div class="k">Last 7 days</div><div class="v" id="ai-week">—</div></div>
         </div>
-        <div class="muted" style="font-size:12px;margin-bottom:8px">Most challenged subjects</div>
-        <div class="hbars" id="ai-subjects"></div>
+        <div class="muted" style="font-size:12px;margin-bottom:8px">Most frequent types · last 30 days</div>
+        <div class="hbars" id="ai-types"></div>
       </div>
       <div class="card">
         <div class="card-head"><h3>Inbox</h3><span class="sub" id="ib-sub"></span><div class="right"><a href="#inbox" class="btn sm ghost">Open →</a></div></div>
@@ -377,7 +374,7 @@ function renderOverview(el) {
       </div>
     </div>
     <div class="card">
-      <div class="card-head"><h3>Latest AI challenges</h3><span class="sub">answers students and parents have disputed</span><div class="right"><a href="#ai" class="btn sm ghost">All →</a></div></div>
+      <div class="card-head"><h3>Latest AI challenges</h3><span class="sub">newest first</span><div class="right"><a href="#ai" class="btn sm ghost">All →</a></div></div>
       <div class="list" id="ai-feed"></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap" id="chips"></div>
@@ -459,11 +456,11 @@ function renderOverview(el) {
       // AI challenges
       const ai = snap.ai;
       if (ai) {
-        ring($('#ai-ring', el), ai.upheldRate, { color: 'var(--series-2)', caption: 'upheld (AI was wrong)', decimals: 0, label: 'Share of reviewed challenges where the AI tutor was wrong' });
         countUp($('#ai-today', el), ai.today);
-        countUp($('#ai-open', el), ai.open);
-        if (ai.bySubject?.length) hBars($('#ai-subjects', el), ai.bySubject.slice(0, 5), { color: 'var(--series-1)' });
-        else $('#ai-subjects', el).innerHTML = '<div class="muted" style="font-size:12.5px">No subject breakdown provided</div>';
+        countUp($('#ai-week', el), ai.week);
+        const top = (ai.byType || []).filter((t) => t.value).sort((x, y) => y.value - x.value).slice(0, 5);
+        if (top.length) hBars($('#ai-types', el), top, { color: 'var(--series-7)' });
+        else $('#ai-types', el).innerHTML = '<div class="muted" style="font-size:12.5px">No type breakdown provided</div>';
         const feed = (ai.recent || []).slice(0, 6);
         $('#ai-feed', el).innerHTML = feed.length ? feed.map((c) => challengeRow(c, !first && !isInit && !seenAI.has(challengeKey(c)))).join('') : '<div class="empty">No challenges yet</div>';
         seenAI = new Set(feed.map(challengeKey));
@@ -505,53 +502,85 @@ function renderOverview(el) {
 }
 
 // ------------------------------------------------------------------ AI view
-// AI challenges: answers from the AI tutor that a student or parent disputed.
 function renderAI(el) {
-  let seen = new Set(), drawn = false, filter = 'all';
+  let seen = new Set(), drawn = false, typeFilter = '';
   el.innerHTML = `<div class="view">
     <div class="grid g-4">
-      <div class="card hero lead" style="--c:var(--series-7);cursor:default"><div class="label"><i>${I.ai}</i>AI challenges</div><div class="value" id="a-total">—</div><div class="meta" id="a-total-m">all time</div></div>
+      <div class="card hero lead" style="--c:var(--series-7);cursor:default"><div class="label"><i>${I.ai}</i>AI challenges</div><div class="value" id="a-total">—</div><div class="meta">all time</div></div>
       <div class="card hero" style="--c:var(--series-1);cursor:default"><div class="label"><i>${I.activity}</i>Today</div><div class="value" id="a-today">—</div><div class="meta">since midnight</div></div>
-      <div class="card hero" style="--c:var(--series-4);cursor:default"><div class="label"><i>${I.mail}</i>Open</div><div class="value" id="a-open">—</div><div class="meta">waiting for review</div></div>
-      <div class="card hero" style="--c:var(--series-2);cursor:default"><div class="label"><i>${I.shield}</i>Upheld rate</div><div class="value" id="a-upheld">—</div><div class="meta">AI was wrong · last 30 days</div></div>
+      <div class="card hero" style="--c:var(--series-3);cursor:default"><div class="label"><i>${I.overview}</i>Last 7 days</div><div class="value" id="a-week">—</div><div class="meta" id="a-week-m"></div></div>
+      <div class="card hero" style="--c:var(--series-2);cursor:default"><div class="label"><i>${I.shield}</i>Most frequent</div><div class="value" id="a-top" style="font-size:28px;margin:18px 0 10px">—</div><div class="meta" id="a-top-m">last 30 days</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>By type</h3><span class="sub">last 30 days · click a type to filter the list below</span></div>
+      <div class="type-grid" id="a-types"></div>
     </div>
     <div class="grid g-main">
-      <div class="card"><div class="card-head"><h3>Challenges per day</h3><span class="sub">last 30 days</span></div><div class="chart-box" id="a-hist"></div></div>
-      <div class="card"><div class="card-head"><h3>Why answers are challenged</h3><span class="sub">last 30 days</span></div><div class="hbars" id="a-reason"></div></div>
+      <div class="card"><div class="card-head"><h3>Challenges per day</h3><span class="sub">all types · last 30 days</span></div><div class="chart-box" id="a-hist"></div></div>
+      <div class="card"><div class="card-head"><h3>Share by type</h3><span class="sub">last 30 days</span></div><div class="hbars" id="a-share"></div></div>
     </div>
-    <div class="grid g-2">
-      <div class="card"><div class="card-head"><h3>By subject</h3><span class="sub">last 30 days</span></div><div class="hbars" id="a-subj"></div></div>
-      <div class="card"><div class="card-head"><h3>Outcomes</h3><span class="sub">what happened after review</span></div><div id="a-outcome"></div></div>
-    </div>
-    <div class="card"><div class="card-head"><h3>Recent challenges</h3><span class="sub">what was disputed — new ones slide in</span><div class="right"><div class="seg" id="a-f"><button data-f="all" class="on">All</button><button data-f="open">Open</button><button data-f="upheld">Upheld</button></div><input type="text" id="a-q" placeholder="Filter…" style="width:200px;padding:7px 10px"></div></div>
+    <div class="card" id="a-outcome-card" hidden><div class="card-head"><h3>Status</h3><span class="sub">last 30 days</span></div><div id="a-outcome"></div></div>
+    <div class="card"><div class="card-head"><h3>Recent challenges</h3><span class="sub" id="a-recent-sub">newest first</span><div class="right"><select id="a-type" style="width:200px;padding:7px 10px"><option value="">All types</option></select><input type="text" id="a-q" placeholder="Search…" style="width:180px;padding:7px 10px"></div></div>
       <div class="list" id="a-recent"></div></div>
   </div>`;
+  const setFilter = (t) => { typeFilter = t; $('#a-type', el).value = t; if (state.snap) update(state.snap); };
   $('#a-q', el).oninput = () => state.snap && update(state.snap);
-  $$('#a-f button', el).forEach((b) => (b.onclick = () => { filter = b.dataset.f; $$('#a-f button', el).forEach((x) => x.classList.toggle('on', x === b)); if (state.snap) update(state.snap); }));
-  const empty = (id, what) => ($(id, el).innerHTML = `<div class="muted" style="font-size:12.5px">No ${what} breakdown provided</div>`);
+  $('#a-type', el).onchange = (e) => setFilter(e.target.value);
   function update(snap, why) {
     if (why === 'uptime') return;
     const ai = snap.ai;
     if (!ai) { $('#a-recent', el).innerHTML = '<div class="empty">No AI challenge data yet. Your business data source needs to return an “ai” section — see docs/stats-endpoint.md.</div>'; return; }
     countUp($('#a-total', el), ai.total);
-    $('#a-total-m', el).textContent = ai.week != null ? `all time · ${int(ai.week)} this week` : 'all time';
     countUp($('#a-today', el), ai.today);
-    countUp($('#a-open', el), ai.open);
-    countUp($('#a-upheld', el), ai.upheldRate, (n) => `${n.toFixed(1)}%`);
+    countUp($('#a-week', el), ai.week);
+    const types = ai.byType || [];
+    const sorted = types.filter((t) => t.value).sort((x, y) => y.value - x.value);
+    $('#a-top', el).textContent = sorted[0]?.name || '—';
+    $('#a-top-m', el).textContent = sorted[0] ? `${int(sorted[0].value)} in the last 30 days` : 'last 30 days';
+    const total30 = types.reduce((t, x) => t + x.value, 0);
+    $('#a-week-m', el).textContent = total30 ? `${int(total30)} in 30 days` : '';
+
+    // Type tiles (always every type, in the canonical order, so it's clear what each one is)
+    const grid = $('#a-types', el);
+    if (!types.length) grid.innerHTML = '<div class="muted" style="font-size:12.5px">No type breakdown provided</div>';
+    else {
+      if (grid.children.length !== types.length) {
+        grid.innerHTML = types.map((t, i) => `<button class="type-tile" data-t="${esc(t.name)}" style="--i:${i}">
+          <div class="tt-name">${esc(t.name)}</div>
+          <div class="tt-row"><span class="tt-value" id="tt-v-${i}">0</span><span class="tt-today" id="tt-d-${i}"></span></div>
+          <div class="tt-spark" id="tt-s-${i}"></div>
+          <div class="tt-desc" id="tt-x-${i}"></div></button>`).join('');
+        $$('.type-tile', grid).forEach((b) => (b.onclick = () => setFilter(typeFilter === b.dataset.t ? '' : b.dataset.t)));
+        const sel = $('#a-type', el);
+        sel.innerHTML = '<option value="">All types</option>' + types.map((t) => `<option>${esc(t.name)}</option>`).join('');
+        sel.value = typeFilter;
+      }
+      types.forEach((t, i) => {
+        countUp($(`#tt-v-${i}`, grid), t.value);
+        $(`#tt-d-${i}`, grid).textContent = t.today ? `+${int(t.today)} today` : '';
+        $(`#tt-x-${i}`, grid).textContent = t.description || '';
+        const sp = $(`#tt-s-${i}`, grid);
+        if (t.history?.length > 1) sparkline(sp, t.history.map((d) => d.value), { color: 'var(--series-7)', height: 30, animate: !drawn });
+        else sp.innerHTML = '';
+      });
+      $$('.type-tile', grid).forEach((b) => b.classList.toggle('selected', b.dataset.t === typeFilter));
+    }
+
     const box = $('#a-hist', el);
     if (ai.history?.length) areaChart(box, ai.history, { color: 'var(--series-7)', animate: !drawn, label: 'AI challenges per day' });
     else { box.innerHTML = '<div class="empty">No daily history provided</div>'; box.__chart = null; }
-    if (ai.byReason?.length) hBars($('#a-reason', el), ai.byReason, { color: 'var(--series-2)' }); else empty('#a-reason', 'reason');
-    if (ai.bySubject?.length) hBars($('#a-subj', el), ai.bySubject, { color: 'var(--series-1)' }); else empty('#a-subj', 'subject');
+    if (sorted.length) hBars($('#a-share', el), sorted, { color: 'var(--series-7)' });
+    else $('#a-share', el).innerHTML = '<div class="muted" style="font-size:12.5px">No type breakdown provided</div>';
+
     let oc = (ai.byOutcome || []).slice().sort((x, y) => y.value - x.value);
+    $('#a-outcome-card', el).hidden = !oc.length;
     if (oc.length > 4) oc = [...oc.slice(0, 3), { name: 'Other', value: oc.slice(3).reduce((t, x) => t + x.value, 0) }];
-    oc = oc.map((o) => { const lab = challengeStatus(o.name)[1]; return { ...o, name: lab === '—' ? o.name : lab }; });
-    if (oc.length && !drawn) donut($('#a-outcome', el), oc, ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)'], { center: 'challenges', label: 'Challenge outcomes' });
-    else if (!oc.length) empty('#a-outcome', 'outcome');
+    if (oc.length && !drawn) donut($('#a-outcome', el), oc, ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)'], { center: 'challenges', label: 'Challenge status' });
+
     const q = $('#a-q', el).value.trim().toLowerCase();
-    const list = (ai.recent || []).filter((c) => (filter === 'all' || challengeStatus(c.status)[1].toLowerCase() === filter)
-      && (!q || `${c.summary} ${c.subject} ${c.reason} ${c.status}`.toLowerCase().includes(q)));
-    $('#a-recent', el).innerHTML = list.length ? list.map((c) => challengeRow(c, drawn && !seen.has(challengeKey(c)))).join('') : '<div class="empty">No matching challenges</div>';
+    const list = (ai.recent || []).filter((c) => (!typeFilter || c.type === typeFilter) && (!q || `${c.type} ${c.summary} ${c.status}`.toLowerCase().includes(q)));
+    $('#a-recent-sub', el).textContent = typeFilter ? `${typeFilter} · newest first` : 'newest first';
+    $('#a-recent', el).innerHTML = list.length ? list.map((c) => challengeRow(c, drawn && !seen.has(challengeKey(c)))).join('') : `<div class="empty">${typeFilter ? `No recent “${esc(typeFilter)}” challenges` : 'No matching challenges'}</div>`;
     seen = new Set((ai.recent || []).map(challengeKey));
     drawn = true;
   }

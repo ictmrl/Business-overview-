@@ -22,32 +22,30 @@ const live = { subs: 1284, active: 0, sessions: 0, revenueToday: 0, ai: 412, aiT
 const started = Date.now();
 
 const SUBJECTS = ['Maths', 'English', 'Physics', 'Chemistry', 'Biology', 'Computer Science', 'History', 'French'];
-const REASONS = ['Answer is wrong', 'Marked my answer wrong', 'Explanation unclear', 'Different method taught at school', 'Not on my syllabus'];
-const QUESTIONS = {
-  Maths: ['Solve 3x² − 12 = 0: tutor said x = 4 only', 'Probability of two sixes: tutor gave 1/6', 'Area of a sector, radius 5, angle 72°', 'Factorise x² + 5x + 6'],
-  English: ['Is "ambition" the main theme in Macbeth Act 1?', 'Feedback on persuasive essay ignored counter-argument', 'Use of semicolons in sample answer'],
-  Physics: ['Units for specific heat capacity', 'Resistance of two 4Ω resistors in parallel', 'Speed of light in glass'],
-  Chemistry: ['Balancing Fe + O₂ → Fe₂O₃', 'Ionic charge of aluminium', 'Rate of reaction vs temperature graph'],
-  Biology: ['Where does the Krebs cycle happen?', 'Function of ribosomes', 'Inheritance of colour blindness'],
-  'Computer Science': ['Binary of 45', 'Python range(1, 5) output', 'Big-O of bubble sort best case'],
-  History: ['Date of the Treaty of Versailles', 'Main cause of WW1 marking'],
-  French: ['Passé composé of "aller"', 'Gender of "problème"'],
+// Sample AI challenges by type (see aitypes.js); summaries are illustrative only.
+const TYPE_SAMPLES = {
+  'Response unsure': ['Tutor hedged on the method for completing the square', 'Low confidence on Macbeth Act 3 interpretation', 'Unsure which formula applies for compound interest'],
+  'Content drift': ['Moved from GCSE photosynthesis into A-level light-dependent reactions', 'Session on fractions drifted into algebra'],
+  'Reported errors': ['Student reported wrong answer for 3x² − 12 = 0', 'Parent reported incorrect date for Treaty of Versailles'],
+  Reversals: ['Tutor changed its answer on resistors in parallel after pushback', 'Reversed marking on a persuasive essay paragraph'],
+  'Rule breaks': ['Gave the full answer instead of a hint on homework question', 'Went beyond session scope rules'],
+  'Unsupported claims': ['Stated a statistic about exam pass rates without a source', 'Claimed a historical quote with no reference'],
+  'Board claims': ['Said AQA requires a method that isn’t in the spec', 'Quoted an Edexcel grade boundary as fact'],
+  'Verifier findings': ['Verifier disagreed with the worked solution to a probability question', 'Verifier found an arithmetic slip in step 3'],
+  Educator: ['Educator flagged an explanation of ionic bonding for review', 'Educator note on tone in a feedback message'],
 };
-const STATUSES = [['open', 0.3], ['upheld', 0.25], ['rejected', 0.45]];
+const TYPE_WEIGHTS = [26, 9, 14, 6, 8, 12, 7, 15, 3];
+const TYPE_NAMES = Object.keys(TYPE_SAMPLES);
+function pickType() {
+  let r = Math.random() * TYPE_WEIGHTS.reduce((x, y) => x + y, 0);
+  for (let i = 0; i < TYPE_NAMES.length; i++) if ((r -= TYPE_WEIGHTS[i]) < 0) return TYPE_NAMES[i];
+  return TYPE_NAMES[0];
+}
 const recent = [];
 function newChallenge(t = Date.now()) {
-  const subject = SUBJECTS[Math.floor(Math.random() ** 1.6 * SUBJECTS.length)];
-  const qs = QUESTIONS[subject];
-  let r = Math.random(), status = 'rejected';
-  for (const [st, p] of STATUSES) { if ((r -= p) < 0) { status = st; break; } }
-  if (Date.now() - t < 20 * 60_000) status = 'open';
-  return {
-    summary: qs[Math.floor(Math.random() * qs.length)],
-    subject,
-    reason: REASONS[Math.floor(Math.random() ** 1.4 * REASONS.length)],
-    status,
-    createdAt: new Date(t).toISOString(),
-  };
+  const type = pickType();
+  const xs = TYPE_SAMPLES[type];
+  return { type, summary: xs[Math.floor(Math.random() * xs.length)], createdAt: new Date(t).toISOString() };
 }
 for (let i = 0; i < 12; i++) recent.push(newChallenge(Date.now() - i * rnd(60_000, 400_000)));
 
@@ -72,12 +70,14 @@ export function demoStats() {
   const sessionsToday = byHour.reduce((a, b) => a + b, 0);
   const activeToday = Math.round(activeHist.at(-2).value * (0.3 + 0.7 * dayFrac));
   activeHist[activeHist.length - 1].value = activeToday;
-  const counts = {};
-  SUBJECTS.forEach((s, i) => (counts[s] = Math.round(96 / (i + 1.3) + rnd(0, 4))));
-  const reasons = REASONS.map((name, i) => ({ name, value: Math.round(70 / (i + 1) + 3) }));
   const aiHist = series(30, 7, 0.01, 4).map((d) => ({ ...d, value: Math.round(d.value) }));
   aiHist[aiHist.length - 1].value = live.aiToday;
 
+  const byType = TYPE_NAMES.map((name, i) => {
+        seed = (i + 3) * 7919;
+        const history = aiHist.map((d) => ({ date: d.date, value: Math.max(0, Math.round((d.value * TYPE_WEIGHTS[i]) / 100 + (srand() - 0.5) * 2)) }));
+        return { name, value: history.reduce((t, d) => t + d.value, 0), today: history.at(-1).value, history };
+      });
   return {
     accounts: { parents: 1046, students: Math.round(live.subs * 1.18), parentsPaid: 912, parentsTrialing: 71, studentsPaid: Math.round(live.subs * 1.18) - 112, studentsTrialing: 97, parentsNewToday: Math.round(dayFrac * 6) + 1, studentsNewToday: Math.round(dayFrac * 9) + 1 },
     subscribers: { total: live.subs, paid: live.subs - 86, trialing: 86, trialsEndingSoon: 19, newToday: Math.round(dayFrac * 14) + 2, newTrialsToday: Math.round(dayFrac * 9) + 1, churnRate: 2.1, history: subsHist },
@@ -85,15 +85,12 @@ export function demoStats() {
     usage: { sessionsToday, minutesToday: Math.round(sessionsToday * 23.4), avgSessionMinutes: 23.4, history: usageHist, byHour },
     revenue: { currency: 'GBP', mrr: Math.round(live.subs * 11.4), today: Math.round(revHist.at(-1).value * dayFrac), month: Math.round(revHist.slice(-new Date().getDate()).reduce((a, b) => a + b.value, 0)), history: revHist },
     ai: {
-      total: live.ai + live.aiToday,
-      today: live.aiToday,
-      open: recent.filter((c) => c.status === 'open').length + 3,
-      upheldRate: 31.6,
-      bySubject: Object.entries(counts).map(([name, value]) => ({ name, value })),
-      byReason: reasons,
-      byOutcome: [{ name: 'Rejected', value: 118 }, { name: 'Upheld', value: 54 }, { name: 'Open', value: 9 }],
-      history: aiHist,
-      recent: recent.slice(),
+      total: 1180 + byType.reduce((t, x) => t + x.value, 0),
+      today: byType.reduce((t, x) => t + x.today, 0),
+      week: byType.reduce((t, x) => t + x.history.slice(-7).reduce((u, d) => u + d.value, 0), 0),
+      byType,
+      history: aiHist.map((d, j) => ({ date: d.date, value: byType.reduce((t, x) => t + x.history[j].value, 0) })),
+      recent: recent.slice().sort((x, y) => y.createdAt.localeCompare(x.createdAt)),
     },
   };
 }

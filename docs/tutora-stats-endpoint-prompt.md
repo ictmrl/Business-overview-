@@ -62,22 +62,24 @@ for the last 30 days, with dates as "YYYY-MM-DD".
     "month": 0,
     "history": [{ "date": "2026-10-15", "value": 0 }]
   },
-  "ai": {                    // AI challenges = answers from the AI tutor that a
-                             // student or parent disputed (e.g. an AiChallenge table)
-    "total": 0,            // all time
+  "ai": {                    // AI challenges raised against AI tutor responses
+    "total": 0,           // all time
     "today": 0,
-    "week": 0,              // optional
-    "open": 0,              // waiting for review
-    "upheldRate": 0,      // % of reviewed challenges (last 30 days) where the AI was wrong
-    "bySubject": [{ "name": "Maths", "value": 0 }],              // last 30 days
-    "byReason":  [{ "name": "Answer is wrong", "value": 0 }],    // why it was disputed
-    "byOutcome": [{ "name": "rejected", "value": 0 }, { "name": "upheld", "value": 0 }, { "name": "open", "value": 0 }],
-    "history":   [{ "date": "2026-10-15", "value": 0 }],          // challenges per day
-    "recent": [{             // latest 12, no names or personal data
-      "summary": "Solve 3x² − 12 = 0: tutor said x = 4 only",   // what was disputed (≤240 chars)
-      "subject": "Maths",
-      "reason": "Answer is wrong",
-      "status": "open",      // open | upheld | rejected (other values shown as-is)
+    "week": 0,             // last 7 days
+    "byType": [              // last 30 days; one entry per type (include zeros)
+      { "name": "Response unsure", "value": 0, "today": 0,
+        "history": [{ "date": "2026-10-15", "value": 0 }],      // optional: per-day counts
+        "description": "" }                                     // optional: one line shown on the tile
+      // …Content drift, Reported errors, Reversals, Rule breaks,
+      //   Unsupported claims, Board claims, Verifier findings, Educator
+    ],
+    "history": [{ "date": "2026-10-15", "value": 0 }],         // all types, per day
+    "open": 0,              // optional, only if challenges have a resolved/unresolved state
+    "byOutcome": [],         // optional, e.g. [{ "name": "open", "value": 0 }, { "name": "resolved", "value": 0 }]
+    "recent": [{             // latest 12, newest first, no student names
+      "type": "Verifier findings",
+      "summary": "Verifier found an arithmetic slip in step 3",   // what happened (≤240 chars)
+      "status": "",          // optional
       "createdAt": "2026-11-13T09:00:00Z"
     }]
   }
@@ -90,9 +92,12 @@ Requirements:
 - Don't include emails, surnames, payment details or any other personal data.
 - If revenue lives only in Stripe, it's fine to omit "revenue" (the dashboard
   can read Stripe directly).
-- "ai" is about AI challenges: answers from the AI tutor that a student or
-  parent disputed. Map our challenge/flag statuses to open / upheld (the AI was
-  wrong) / rejected (the AI's answer stood).
+- "ai" is about AI challenges raised against AI tutor responses, grouped by
+  type: Response unsure, Content drift, Reported errors, Reversals, Rule breaks,
+  Unsupported claims, Board claims, Verifier findings, Educator. Return every
+  type in byType (zero if none), using our own type names. Include per-type
+  daily history if it's cheap. recent[].summary is a short description of what
+  was flagged, with no student names.
 - You can skip churnRate, active.week/month, usage.minutesToday,
   usage.avgSessionMinutes and usage.history: the dashboard doesn't show them yet.
 - Add a short test for the 401 path, and document ADMIN_STATS_TOKEN in the README.

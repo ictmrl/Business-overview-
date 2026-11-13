@@ -54,27 +54,36 @@ arrays are daily, oldest first, ideally the last 30 days.
     "month": 3644,
     "history": [{ "date": "2026-10-14", "value": 410.5 }]
   },
-  "ai": {                    // AI challenges = answers from the AI tutor that a
-                             // student or parent disputed (e.g. an AiChallenge table)
-    "total": 412,            // all time
+  "ai": {                    // AI challenges raised against AI tutor responses
+    "total": 1645,           // all time
     "today": 4,
-    "week": 31,              // optional
-    "open": 10,              // waiting for review
-    "upheldRate": 31.6,      // % of reviewed challenges (last 30 days) where the AI was wrong
-    "bySubject": [{ "name": "Maths", "value": 78 }],              // last 30 days
-    "byReason":  [{ "name": "Answer is wrong", "value": 73 }],    // why it was disputed
-    "byOutcome": [{ "name": "rejected", "value": 118 }, { "name": "upheld", "value": 54 }, { "name": "open", "value": 9 }],
-    "history":   [{ "date": "2026-10-15", "value": 6 }],          // challenges per day
-    "recent": [{             // latest 12, no names or personal data
-      "summary": "Solve 3x² − 12 = 0: tutor said x = 4 only",   // what was disputed (≤240 chars)
-      "subject": "Maths",
-      "reason": "Answer is wrong",
-      "status": "open",      // open | upheld | rejected (other values shown as-is)
+    "week": 133,             // last 7 days
+    "byType": [              // last 30 days; one entry per type (include zeros)
+      { "name": "Response unsure", "value": 118, "today": 1,
+        "history": [{ "date": "2026-10-15", "value": 3 }],      // optional: per-day counts
+        "description": "" }                                     // optional: one line shown on the tile
+      // …Content drift, Reported errors, Reversals, Rule breaks,
+      //   Unsupported claims, Board claims, Verifier findings, Educator
+    ],
+    "history": [{ "date": "2026-10-15", "value": 14 }],         // all types, per day
+    "open": 10,              // optional, only if challenges have a resolved/unresolved state
+    "byOutcome": [],         // optional, e.g. [{ "name": "open", "value": 9 }, { "name": "resolved", "value": 40 }]
+    "recent": [{             // latest 12, newest first, no student names
+      "type": "Verifier findings",
+      "summary": "Verifier found an arithmetic slip in step 3",   // what happened (≤240 chars)
+      "status": "",          // optional
       "createdAt": "2026-11-13T09:00:00Z"
     }]
   }
 }
 ```
+
+**AI challenge types.** The dashboard always shows these nine, in this order:
+Response unsure, Content drift, Reported errors, Reversals, Rule breaks,
+Unsupported claims, Board claims, Verifier findings, Educator. Type names are
+matched loosely, so `RESPONSE_UNSURE`, `responseUnsure` or `response_unsure`
+all work. Any other type you send is shown after them. `byType` may also be a
+plain map such as `{ "RESPONSE_UNSURE": 12, "EDUCATOR": 1 }`.
 
 The overview's **Accounts** card shows parents, students, students per parent,
 and subscriptions per parent. When subscriptions per parent roughly matches
@@ -86,7 +95,7 @@ The dashboard also accepts a few alternative names: `families` / `children`
 for `parents` / `students`, `activeCustomers` for
 `active`, `aiChallenges` for `ai`, `daily/weekly/monthly` for
 `today/week/month`, `count` in the breakdown arrays, `byStatus` for
-`byOutcome`, and `question` or `title` for a challenge's `summary`.
+`byOutcome`, `category`/`kind` for `type`, and `detail` for a challenge's `summary`.
 
 ### What the dashboard actually displays
 
@@ -122,11 +131,11 @@ router.get('/api/admin/stats', async (req, res) => {
     FROM generate_series(current_date - 29, current_date, interval '1 day') d`);
   const [ai] = await q(`SELECT count(*)::int AS total,
       count(*) FILTER (WHERE created_at >= current_date)::int AS today FROM ai_challenges`);
-  const bySubject = await q(`SELECT subject AS name, count(*)::int AS value FROM ai_challenges
+  const byType = await q(`SELECT type AS name, count(*)::int AS value FROM ai_challenges
     WHERE created_at >= now() - interval '30 days' GROUP BY 1 ORDER BY 2 DESC LIMIT 8`);
-  const recent = await q(`SELECT title, subject, level, score, completed_at IS NOT NULL AS completed,
-      created_at AS "createdAt" FROM ai_challenges ORDER BY created_at DESC LIMIT 12`);
-  res.json({ subscribers: { total: subs.total, history: subsHist }, ai: { ...ai, bySubject, recent } });
+  const recent = await q(`SELECT type, left(summary, 240) AS summary, created_at AS "createdAt"
+    FROM ai_challenges ORDER BY created_at DESC LIMIT 12`);
+  res.json({ subscribers: { total: subs.total, history: subsHist }, ai: { ...ai, byType, recent } });
 });
 export default router;
 ```

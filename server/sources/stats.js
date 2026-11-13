@@ -6,6 +6,7 @@
 //              `date`+`value` rows for history).
 import pg from 'pg';
 import { inspectSchema, detectMapping, schemaReport } from './schema.js';
+import { AI_TYPES, aiTypeLabel } from './aitypes.js';
 
 const num = (v, d = 0) => (v == null || v === '' || Number.isNaN(Number(v)) ? d : Number(v));
 // Optional number: a value that wasn't provided (or whose query failed) stays undefined
@@ -32,18 +33,30 @@ export function normalizeStats(raw = {}) {
   if (Object.keys(u).length) out.usage = { sessionsToday: opt(u.sessionsToday), minutesToday: opt(u.minutesToday), avgSessionMinutes: opt(u.avgSessionMinutes), history: hist(u.history), byHour: Array.isArray(u.byHour) ? u.byHour.map((x) => num(typeof x === 'object' ? x.value : x)) : undefined };
   if (Object.keys(r).length) out.revenue = { currency: r.currency || undefined, mrr: opt(r.mrr), today: opt(r.today), month: opt(r.month), history: hist(r.history) };
   if (Object.keys(ai).length) {
-    const pairs = (xs, key) => (xs || []).map((x) => ({ name: String(x.name ?? x[key] ?? 'Other'), value: num(x.value ?? x.count) }));
+    const pairs = (xs, k2) => (xs || []).map((x) => ({ name: String(x.name ?? x[k2] ?? 'Other'), value: num(x.value ?? x.count) }));
+    // byType may be an array of {name|type, value|count, today?, history?, description?} or a {type: count} map.
+    let rawTypes = ai.byType ?? ai.byCategory ?? ai.byKind ?? ai.types ?? [];
+    if (!Array.isArray(rawTypes)) rawTypes = Object.entries(rawTypes).map(([name, v]) => (typeof v === 'object' ? { name, ...v } : { name, value: v }));
+    const merged = new Map(AI_TYPES.map((name) => [name, { name, value: 0, today: undefined, history: [], description: '' }]));
+    for (const t of rawTypes) {
+      const name = aiTypeLabel(t.name ?? t.type ?? t.category ?? t.kind);
+      const cur = merged.get(name) || { name, value: 0, history: [], description: '' };
+      cur.value += num(t.value ?? t.count ?? t.last30Days);
+      if (t.today != null) cur.today = (cur.today || 0) + num(t.today);
+      if (t.history?.length) cur.history = hist(t.history);
+      if (t.description) cur.description = String(t.description).slice(0, 200);
+      merged.set(name, cur);
+    }
     out.ai = {
-      total: opt(ai.total), today: opt(ai.today), week: opt(ai.week),
-      open: opt(ai.open ?? ai.pending),
-      upheldRate: opt(ai.upheldRate ?? ai.aiWrongRate ?? ai.overturnedRate),
-      bySubject: pairs(ai.bySubject, 'subject'),
-      byReason: pairs(ai.byReason, 'reason'),
+      total: opt(ai.total), today: opt(ai.today), week: opt(ai.week ?? ai.last7Days),
+      open: opt(ai.open ?? ai.pending ?? ai.unresolved),
+      byType: rawTypes.length ? [...merged.values()] : [],
       byOutcome: pairs(ai.byOutcome ?? ai.byStatus, 'status'),
       history: hist(ai.history),
       recent: (ai.recent || []).map((x) => ({
-        summary: String(x.summary ?? x.question ?? x.title ?? 'Challenge').slice(0, 240),
-        subject: x.subject || '', reason: x.reason || '', status: x.status || '',
+        type: aiTypeLabel(x.type ?? x.category ?? x.kind ?? ''),
+        summary: String(x.summary ?? x.detail ?? x.question ?? x.title ?? '').slice(0, 240),
+        status: x.status || '',
         createdAt: x.createdAt || x.created_at,
       })),
     };
@@ -87,7 +100,7 @@ async function fromPostgres(cfg) {
     active: { today: one('activeToday'), week: one('activeWeek'), month: one('activeMonth'), history: rows.usageHistory },
     usage: { sessionsToday: byHour?.reduce((a, b) => a + b, 0), history: rows.usageHistory, byHour },
     revenue: { mrr: one('mrr'), month: one('revenueMonth'), today: rows.revenueHistory?.find((r) => String(r.date).slice(0, 10) === new Date().toISOString().slice(0, 10))?.value, history: rows.revenueHistory },
-    ai: { total: one('aiChallengesTotal'), today: one('aiChallengesToday'), open: one('aiOpen'), upheldRate: one('aiUpheldRate'), bySubject: rows.aiBySubject, byReason: rows.aiByReason, byOutcome: rows.aiByOutcome, history: rows.aiHistory, recent: rows.aiRecent },
+    ai: { total: one('aiChallengesTotal'), today: one('aiChallengesToday'), week: one('aiChallengesWeek'), open: one('aiOpen'), byType: rows.aiByType, byOutcome: rows.aiByOutcome, history: rows.aiHistory, recent: rows.aiRecent },
   };
   const out = normalizeStats(raw);
   if (Object.keys(errors).length) out._queryErrors = errors;
