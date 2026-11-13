@@ -67,11 +67,20 @@ const I = {
 // ------------------------------------------------------------------ boot / auth
 let state = { snap: null, auth: null, view: null, es: null };
 
+let booting = null;
 async function boot() {
-  state.es?.close();
-  state.auth = await api('/api/auth/status');
-  if (!state.auth.authed) return renderAuth();
-  renderShell();
+  // Coalesce overlapping calls (e.g. auto passkey prompt + button click both signing in).
+  if (booting) return booting;
+  booting = (async () => {
+    state.es?.close();
+    // Forget the previous view: the DOM is about to be replaced, so the next route() must render.
+    state.view?.destroy?.();
+    state.view = null;
+    state.auth = await api('/api/auth/status');
+    if (!state.auth.authed) return renderAuth();
+    renderShell();
+  })();
+  try { return await booting; } finally { booting = null; }
 }
 
 function renderAuth() {
@@ -196,7 +205,7 @@ function renderShell() {
   api('/api/version').then((v) => { const b = $('#build'); if (b) b.textContent = `Build ${v.build}`; }).catch(() => {});
   connectStream();
   window.onhashchange = () => route();
-  route();
+  route(true);
 }
 
 function connectStream() {
