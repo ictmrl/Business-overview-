@@ -440,3 +440,26 @@ details.queries summary { cursor: pointer; color: var(--text-2); margin: 6px 0 1
 .type-tag { color: var(--text); }
 @media (max-width: 1200px) { .type-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .type-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* AI challenge rows: fixed columns so status always lines up */
+.chal-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) 64px; align-items: center; gap: 14px; }
+.chal-row.with-status { grid-template-columns: 150px minmax(0, 1fr) 128px 64px; }
+.chal-row .type-tag { justify-self: start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.chal-row .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
+.chal-row .status { justify-self: start; }
+.chal-row .time { text-align: right; }
+@media (max-width: 700px) {
+  .chal-row, .chal-row.with-status { grid-template-columns: minmax(0, 1fr) auto; }
+  .chal-row .type-tag { grid-column: 1 / -1; }
+}
+.status.info { color: var(--series-1); background: color-mix(in srgb, var(--series-1) 16%, transparent); }
+.status.info::before { background: var(--series-1); }
+
+/* Open tile: red with count when anything is unresolved, green when nothing is */
+.open-note { font-size: 11.5px; margin-top: 2px; color: var(--muted); font-weight: 600; }
+.open-tile.alert, .open-hero.alert { background: color-mix(in srgb, var(--critical) 16%, var(--surface-2)); border-color: color-mix(in srgb, var(--critical) 55%, transparent); }
+.open-tile.alert .v, .open-tile.alert .open-note, .open-hero.alert .v, .open-hero.alert .open-note { color: var(--bad-text); }
+.open-tile.ok, .open-hero.ok { background: color-mix(in srgb, var(--good) 14%, var(--surface-2)); border-color: color-mix(in srgb, var(--good) 50%, transparent); }
+.open-tile.ok .v, .open-tile.ok .open-note, .open-hero.ok .v, .open-hero.ok .open-note { color: var(--good-text); }
+.open-hero.alert::after { background: var(--critical); }
+.open-hero.ok::after { background: var(--good); }

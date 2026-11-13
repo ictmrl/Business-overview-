@@ -71,12 +71,12 @@ arrays are daily, oldest first, ideally the last 30 days.
       //   Unsupported claims, Board claims, Verifier findings, Educator
     ],
     "history": [{ "date": "2026-10-15", "value": 14 }],         // all types, per day
-    "open": 10,              // optional, only if challenges have a resolved/unresolved state
+    "open": 10,             // challenges still needing action: status is not resolved, non-issue or duplicate
     "byOutcome": [],         // optional, e.g. [{ "name": "open", "value": 9 }, { "name": "resolved", "value": 40 }]
     "recent": [{             // latest 12, newest first, no student names
       "type": "Verifier findings",
       "summary": "Verifier found an arithmetic slip in step 3",   // what happened (≤240 chars)
-      "status": "",          // optional
+      "status": "resolved",  // resolved (green) | non_issue, duplicate (blue) | anything else = action required (red)
       "createdAt": "2026-11-13T09:00:00Z"
     }]
   }

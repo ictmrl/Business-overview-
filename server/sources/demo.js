@@ -45,7 +45,9 @@ const recent = [];
 function newChallenge(t = Date.now()) {
   const type = pickType();
   const xs = TYPE_SAMPLES[type];
-  return { type, summary: xs[Math.floor(Math.random() * xs.length)], createdAt: new Date(t).toISOString() };
+  const r = Math.random();
+  const status = Date.now() - t < 30 * 60_000 ? 'open' : r < 0.5 ? 'resolved' : r < 0.65 ? 'non_issue' : r < 0.75 ? 'duplicate' : r < 0.9 ? 'needs_review' : 'open';
+  return { type, summary: xs[Math.floor(Math.random() * xs.length)], status, createdAt: new Date(t).toISOString() };
 }
 for (let i = 0; i < 12; i++) recent.push(newChallenge(Date.now() - i * rnd(60_000, 400_000)));
 
@@ -89,6 +91,7 @@ export function demoStats() {
       today: byType.reduce((t, x) => t + x.today, 0),
       week: byType.reduce((t, x) => t + x.history.slice(-7).reduce((u, d) => u + d.value, 0), 0),
       byType,
+      open: recent.filter((c) => !/resolv|non_issue|duplic/.test(c.status)).length + 2,
       history: aiHist.map((d, j) => ({ date: d.date, value: byType.reduce((t, x) => t + x.history[j].value, 0) })),
       recent: recent.slice().sort((x, y) => y.createdAt.localeCompare(x.createdAt)),
     },

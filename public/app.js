@@ -297,21 +297,34 @@ const serviceStatus = (s) => {
 // AI challenges: flags raised against AI tutor responses, by type (Response unsure,
 // Content drift, Reported errors, Reversals, Rule breaks, Unsupported claims,
 // Board claims, Verifier findings, Educator).
+// Status colours: resolved → green; non-issue / duplicate → blue; anything else → red (action required).
+const tidy = (v) => { const t = String(v).replace(/[_-]+/g, ' ').trim().toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); };
 function challengeStatus(s) {
-  const v = String(s || '');
+  const v = String(s || '').trim();
   if (!v) return null;
-  if (/open|pending|new|review|await|unresolved/i.test(v)) return ['warning', 'Open'];
-  if (/resolv|closed|done|fixed|dismiss|reject/i.test(v)) return ['good', v[0].toUpperCase() + v.slice(1).toLowerCase()];
-  return ['neutral', v];
+  if (/resolv/i.test(v)) return ['good', tidy(v), 'Resolved'];
+  if (/non.?issue|not.?an?.?issue/i.test(v)) return ['info', 'Non-issue', 'Closed: not an issue'];
+  if (/duplic|dupe/i.test(v)) return ['info', 'Duplicate', 'Closed: duplicate'];
+  return ['critical', tidy(v), 'Action required'];
 }
-const challengeRow = (c, isNew) => {
-  const st = challengeStatus(c.status);
-  return `<div class="row ${isNew ? 'new' : ''}">
-    <span class="tag type-tag">${esc(c.type || 'Other')}</span>
-    <div class="grow"><div class="title" title="${esc(c.summary)}">${esc(c.summary || '—')}</div></div>
-    ${st ? `<span class="status ${st[0]}">${esc(st[1])}</span>` : ''}
+const challengeRow = (c, isNew, showStatus) => {
+  const st = challengeStatus(c.status) || (showStatus ? ['critical', 'Open', 'Action required'] : null);
+  return `<div class="row chal-row ${showStatus ? 'with-status' : ''} ${isNew ? 'new' : ''}">
+    <span class="tag type-tag" title="${esc(c.type || 'Other')}">${esc(c.type || 'Other')}</span>
+    <div class="title" title="${esc(c.summary)}">${esc(c.summary || '—')}</div>
+    ${showStatus ? `<span class="status ${st[0]}" title="${esc(st[2])}">${esc(st[1])}</span>` : ''}
     <span class="time">${ago(c.createdAt)}</span></div>`;
 };
+// Show the status column only if the backend sends statuses at all.
+const hasStatuses = (list) => (list || []).some((c) => c.status);
+/** The "Open" tile: red with the count if anything is unresolved, green if none, neutral if unknown. */
+function drawOpenTile(box, open) {
+  if (!box) return;
+  box.classList.toggle('alert', open > 0);
+  box.classList.toggle('ok', open === 0);
+  countUp(box.querySelector('.v'), open);
+  box.querySelector('.open-note').textContent = open == null ? 'not reported' : open > 0 ? 'Action required' : 'All resolved';
+}
 const challengeKey = (c) => c.createdAt + '|' + c.type + '|' + c.summary;
 const shortUrl = (u) => u.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
@@ -356,7 +369,8 @@ function renderOverview(el) {
     <div class="grid g-3">
       <div class="card">
         <div class="card-head"><h3>AI challenges</h3><span class="sub">flags on AI tutor responses</span><div class="right"><a href="#ai" class="btn sm ghost">Details →</a></div></div>
-        <div class="stats-row" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:16px">
+        <div class="stats-row" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px">
+          <div class="mini open-tile" id="ai-open"><div class="k">Open</div><div class="v">—</div><div class="open-note"></div></div>
           <div class="mini"><div class="k">Today</div><div class="v" id="ai-today">—</div></div>
           <div class="mini"><div class="k">Last 7 days</div><div class="v" id="ai-week">—</div></div>
         </div>
@@ -462,11 +476,13 @@ function renderOverview(el) {
       if (ai) {
         countUp($('#ai-today', el), ai.today);
         countUp($('#ai-week', el), ai.week);
+        drawOpenTile($('#ai-open', el), ai.open);
         const top = (ai.byType || []).filter((t) => t.value).sort((x, y) => y.value - x.value).slice(0, 5);
         if (top.length) hBars($('#ai-types', el), top, { color: 'var(--series-7)' });
         else $('#ai-types', el).innerHTML = '<div class="muted" style="font-size:12.5px">No type breakdown provided</div>';
         const feed = (ai.recent || []).slice(0, 6);
-        $('#ai-feed', el).innerHTML = feed.length ? feed.map((c) => challengeRow(c, !first && !isInit && !seenAI.has(challengeKey(c)))).join('') : '<div class="empty">No challenges yet</div>';
+        const withStatus = hasStatuses(ai.recent);
+        $('#ai-feed', el).innerHTML = feed.length ? feed.map((c) => challengeRow(c, !first && !isInit && !seenAI.has(challengeKey(c)), withStatus)).join('') : '<div class="empty">No challenges yet</div>';
         seenAI = new Set(feed.map(challengeKey));
       } else $('#ai-feed', el).innerHTML = '<div class="empty">No AI challenge data from your business data source yet</div>';
 
@@ -510,9 +526,9 @@ function renderAI(el) {
   let seen = new Set(), drawn = false, typeFilter = '';
   el.innerHTML = `<div class="view">
     <div class="grid g-4">
-      <div class="card hero lead" style="--c:var(--series-7);cursor:default"><div class="label"><i>${I.ai}</i>AI challenges</div><div class="value" id="a-total">—</div><div class="meta">all time</div></div>
+      <div class="card hero lead" style="--c:var(--series-7);cursor:default"><div class="label"><i>${I.ai}</i>AI challenges</div><div class="value" id="a-total">—</div><div class="meta" id="a-total-m">all time</div></div>
       <div class="card hero" style="--c:var(--series-1);cursor:default"><div class="label"><i>${I.activity}</i>Today</div><div class="value" id="a-today">—</div><div class="meta">since midnight</div></div>
-      <div class="card hero" style="--c:var(--series-3);cursor:default"><div class="label"><i>${I.overview}</i>Last 7 days</div><div class="value" id="a-week">—</div><div class="meta" id="a-week-m"></div></div>
+      <div class="card hero open-hero" id="a-open" style="--c:var(--series-3);cursor:default"><div class="label"><i>${I.overview}</i>Open</div><div class="value v">—</div><div class="meta open-note"></div></div>
       <div class="card hero" style="--c:var(--series-2);cursor:default"><div class="label"><i>${I.shield}</i>Most frequent</div><div class="value" id="a-top" style="font-size:28px;margin:18px 0 10px">—</div><div class="meta" id="a-top-m">last 30 days</div></div>
     </div>
     <div class="card">
@@ -536,13 +552,13 @@ function renderAI(el) {
     if (!ai) { $('#a-recent', el).innerHTML = '<div class="empty">No AI challenge data yet. Your business data source needs to return an “ai” section — see docs/stats-endpoint.md.</div>'; return; }
     countUp($('#a-total', el), ai.total);
     countUp($('#a-today', el), ai.today);
-    countUp($('#a-week', el), ai.week);
+    drawOpenTile($('#a-open', el), ai.open);
     const types = ai.byType || [];
     const sorted = types.filter((t) => t.value).sort((x, y) => y.value - x.value);
     $('#a-top', el).textContent = sorted[0]?.name || '—';
     $('#a-top-m', el).textContent = sorted[0] ? `${int(sorted[0].value)} in the last 30 days` : 'last 30 days';
     const total30 = types.reduce((t, x) => t + x.value, 0);
-    $('#a-week-m', el).textContent = total30 ? `${int(total30)} in 30 days` : '';
+    $('#a-total-m', el).textContent = ['all time', ai.week != null && `${int(ai.week)} in 7 days`, total30 && `${int(total30)} in 30 days`].filter(Boolean).join(' · ');
 
     // Type tiles (always every type, in the canonical order, so it's clear what each one is)
     const grid = $('#a-types', el);
@@ -584,7 +600,7 @@ function renderAI(el) {
     const q = $('#a-q', el).value.trim().toLowerCase();
     const list = (ai.recent || []).filter((c) => (!typeFilter || c.type === typeFilter) && (!q || `${c.type} ${c.summary} ${c.status}`.toLowerCase().includes(q)));
     $('#a-recent-sub', el).textContent = typeFilter ? `${typeFilter} · newest first` : 'newest first';
-    $('#a-recent', el).innerHTML = list.length ? list.map((c) => challengeRow(c, drawn && !seen.has(challengeKey(c)))).join('') : `<div class="empty">${typeFilter ? `No recent “${esc(typeFilter)}” challenges` : 'No matching challenges'}</div>`;
+    $('#a-recent', el).innerHTML = list.length ? list.map((c) => challengeRow(c, drawn && !seen.has(challengeKey(c)), hasStatuses(ai.recent))).join('') : `<div class="empty">${typeFilter ? `No recent “${esc(typeFilter)}” challenges` : 'No matching challenges'}</div>`;
     seen = new Set((ai.recent || []).map(challengeKey));
     drawn = true;
   }
