@@ -227,10 +227,10 @@ api.post('/settings/stats/railway-db', async (req, res) => {
   try {
     const s = getSettings();
     if (!railwayConfigured(s.railway)) throw new Error('Connect Railway first (Settings → Railway: token and project ID).');
-    const { url, service, environment } = await findDatabaseUrl(s.railway);
+    const { url, service, environment, external } = await findDatabaseUrl(s.railway);
     updateSection('stats', { mode: 'postgres', databaseUrl: url, databaseSsl: true });
     restartLoop();
-    res.json({ ok: true, message: `Found the database in “${service}” (${environment}) and saved it.`, settings: getPublicSettings() });
+    res.json({ ok: true, message: external ? `“${service}” uses a database hosted outside Railway — found its URL and saved it.` : `Found the database in “${service}” (${environment}) and saved it.`, settings: getPublicSettings() });
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 

@@ -52,7 +52,7 @@ export const DEFAULT_SETTINGS = {
   railway: { token: '', tokenType: 'account', projectId: '', environmentId: '' },
   stats: {
     mode: 'api', // 'api' | 'postgres'
-    apiBaseUrl: 'https://api.tutorise.uk',
+    apiBaseUrl: 'https://tutorise.uk',
     apiPath: '/admin/stats',
     apiToken: '',
     databaseUrl: '',
@@ -90,7 +90,7 @@ export const DEFAULT_SETTINGS = {
     },
   },
   stripe: { secretKey: '' },
-  uptime: { urls: 'https://tutorise.uk\nhttps://api.tutorise.uk/health', intervalSeconds: 60 },
+  uptime: { urls: 'https://tutorise.uk\nhttps://www.tutorise.uk', intervalSeconds: 60 },
   email: {
     imapHost: '', imapPort: 993, imapSecure: true, imapUser: '', imapPassword: '', mailbox: 'INBOX',
     smtpHost: '', smtpPort: 465, smtpSecure: true, smtpUser: '', smtpPassword: '',
@@ -125,6 +125,9 @@ const OLD_DEFAULT_QUERIES = {
   for (const [k, olds] of Object.entries(OLD_DEFAULT_QUERIES)) {
     if (olds.includes(q[k])) q[k] = DEFAULT_SETTINGS.stats.queries[k];
   }
+  // Earlier defaults guessed an api.tutorise.uk host that doesn't exist.
+  if (state.settings.stats.apiBaseUrl === 'https://api.tutorise.uk') state.settings.stats.apiBaseUrl = DEFAULT_SETTINGS.stats.apiBaseUrl;
+  if (state.settings.uptime.urls === 'https://tutorise.uk\nhttps://api.tutorise.uk/health') state.settings.uptime.urls = DEFAULT_SETTINGS.uptime.urls;
 }
 
 let saveTimer;

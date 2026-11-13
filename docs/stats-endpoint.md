@@ -3,7 +3,7 @@
 In **Settings → Business data → Tutorise stats API endpoint**, the dashboard calls
 
 ```
-GET {API base URL}{Stats path}        e.g. https://api.tutorise.uk/admin/stats
+GET {API base URL}{Stats path}        e.g. https://tutorise.uk/admin/stats
 Authorization: Bearer <token>
 ```
 

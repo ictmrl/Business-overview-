@@ -81,7 +81,7 @@ export async function findDatabaseUrl(cfg) {
   // Check likely database services first.
   services.sort((a, b) => Number(/postgres|db|database/i.test(b.name)) - Number(/postgres|db|database/i.test(a.name)));
   const checked = [];
-  let internalHost = null, unreadable = [];
+  let internalHost = null, unreadable = [], nonPostgres = null;
   for (const s of services) {
     let vars;
     try {
@@ -97,8 +97,20 @@ export async function findDatabaseUrl(cfg) {
       const db = encodeURIComponent(vars.PGDATABASE || vars.POSTGRES_DB || 'railway');
       return { url: `postgresql://${user}:${pass}@${vars.RAILWAY_TCP_PROXY_DOMAIN}:${vars.RAILWAY_TCP_PROXY_PORT}/${db}`, service: s.name, environment: env.name };
     }
-    const m = /@([a-z0-9-]+)\.railway\.internal/i.exec(vars.DATABASE_URL || '');
-    if (m && !internalHost) internalHost = m[1];
+    const dbUrl = vars.DATABASE_URL || vars.POSTGRES_URL || vars.DB_URL || '';
+    const m = /^postgres(ql)?:\/\//i.test(dbUrl) && /@([a-z0-9-]+)\.railway\.internal/i.exec(dbUrl);
+    if (m) { internalHost ||= m[1]; }
+    // A Postgres hosted elsewhere (Neon, Supabase, RDS…) is reachable directly.
+    else if (/^postgres(ql)?:\/\//i.test(dbUrl) && !/\.railway\.internal|@(localhost|127\.0\.0\.1)[:/]/i.test(dbUrl)) {
+      return { url: dbUrl, service: s.name, environment: env.name, external: true };
+    }
+    // SQLite file (e.g. Prisma "file:./dev.db") or another non-Postgres database.
+    else if (dbUrl && !nonPostgres) nonPostgres = { service: s.name, kind: /^(file:|sqlite)/i.test(dbUrl) || /\.(db|sqlite3?)$/i.test(dbUrl) ? 'sqlite' : (dbUrl.split(':')[0] || 'unknown') };
+  }
+  if (!internalHost && nonPostgres) {
+    throw new Error(nonPostgres.kind === 'sqlite'
+      ? `“${nonPostgres.service}” stores its data in a SQLite file on its own volume, not in a Postgres database, so the dashboard can't connect to it directly. Use the “Tutorise stats API endpoint” source instead: add a small /admin/stats route to ${nonPostgres.service} (see docs/tutora-stats-endpoint-prompt.md for a ready-made prompt).`
+      : `“${nonPostgres.service}” uses a ${nonPostgres.kind} database, which the dashboard can't query directly. Use the “Tutorise stats API endpoint” source instead (see docs/tutora-stats-endpoint-prompt.md).`);
   }
   const summary = `Checked ${[...checked, ...unreadable.map((n) => n + ' (couldn’t read variables)')].join(', ')} in “${env.name}”.`;
   if (internalHost) {
