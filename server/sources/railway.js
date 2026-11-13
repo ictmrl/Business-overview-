@@ -80,16 +80,36 @@ export async function findDatabaseUrl(cfg) {
   const services = data.project.services.edges.map((e) => e.node);
   // Check likely database services first.
   services.sort((a, b) => Number(/postgres|db|database/i.test(b.name)) - Number(/postgres|db|database/i.test(a.name)));
-  let internalOnly = null;
+  const checked = [];
+  let internalHost = null, unreadable = [];
   for (const s of services) {
     let vars;
     try {
       vars = (await gql(cfg, `query($p: String!, $e: String!, $s: String!) { variables(projectId: $p, environmentId: $e, serviceId: $s) }`,
         { p: cfg.projectId, e: env.id, s: s.id })).variables || {};
-    } catch { continue; }
+    } catch { unreadable.push(s.name); continue; }
+    checked.push(s.name);
     if (vars.DATABASE_PUBLIC_URL) return { url: vars.DATABASE_PUBLIC_URL, service: s.name, environment: env.name };
-    if (vars.DATABASE_URL && !internalOnly) internalOnly = s.name;
+    // Postgres service with the TCP proxy on but no DATABASE_PUBLIC_URL variable: build it.
+    if (vars.RAILWAY_TCP_PROXY_DOMAIN && vars.RAILWAY_TCP_PROXY_PORT && (vars.PGPASSWORD || vars.POSTGRES_PASSWORD)) {
+      const user = encodeURIComponent(vars.PGUSER || vars.POSTGRES_USER || 'postgres');
+      const pass = encodeURIComponent(vars.PGPASSWORD || vars.POSTGRES_PASSWORD);
+      const db = encodeURIComponent(vars.PGDATABASE || vars.POSTGRES_DB || 'railway');
+      return { url: `postgresql://${user}:${pass}@${vars.RAILWAY_TCP_PROXY_DOMAIN}:${vars.RAILWAY_TCP_PROXY_PORT}/${db}`, service: s.name, environment: env.name };
+    }
+    const m = /@([a-z0-9-]+)\.railway\.internal/i.exec(vars.DATABASE_URL || '');
+    if (m && !internalHost) internalHost = m[1];
   }
-  if (internalOnly) throw new Error(`“${internalOnly}” only has an internal DATABASE_URL. In Railway, open that Postgres service → Settings → Networking and enable the TCP proxy (public networking), then try again.`);
-  throw new Error(`No DATABASE_PUBLIC_URL found in any service in the “${env.name}” environment`);
+  const summary = `Checked ${[...checked, ...unreadable.map((n) => n + ' (couldn’t read variables)')].join(', ')} in “${env.name}”.`;
+  if (internalHost) {
+    // Railway's private hostname is the database service's name.
+    const db = services.find((s) => s.name.toLowerCase().replace(/[^a-z0-9-]/g, '-') === internalHost.toLowerCase())
+      || services.find((s) => s.name.toLowerCase().includes(internalHost.toLowerCase().split('-')[0]));
+    const name = db ? `“${db.name}”` : `the database service (internal host “${internalHost}”)`;
+    if (db && unreadable.includes(db.name)) {
+      throw new Error(`Your database is ${name}, but your Railway token isn't allowed to read its settings. In Settings → Railway, use an account token (Railway → Account Settings → Tokens) instead of a project token, then press Fetch again. If it still fails, make sure ${name} has a TCP Proxy (Settings → Networking → Public Networking). ${summary}`);
+    }
+    throw new Error(`Your database is ${name}, and it isn't reachable from outside Railway yet. In Railway, click ${name} (the database, not your app) → Settings → Networking → Public Networking → add a TCP Proxy on port 5432. Then press Fetch again. ${summary}`);
+  }
+  throw new Error(`Couldn’t find a Postgres database URL. ${summary}`);
 }
