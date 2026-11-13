@@ -162,6 +162,7 @@ function renderShell() {
       <div class="sidebar-foot">
         <div class="user-chip"><div class="avatar">${esc(u.name[0] || '?')}</div><div class="grow"><div>${esc(u.name)}</div><div class="muted" style="font-size:11.5px">${esc(u.email || 'Owner')}</div></div></div>
         <button class="btn ghost sm" id="logout">${I.logout} Sign out</button>
+        <div class="muted" style="font-size:11px;text-align:center" id="build"></div>
       </div>
     </aside>
     <main class="main" id="main">
@@ -192,6 +193,7 @@ function renderShell() {
   };
   const tickClock = () => { const c = $('#clock'); if (c) c.textContent = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); };
   tickClock(); clearInterval(state.clockT); state.clockT = setInterval(() => { tickClock(); updateAgo(); }, 1000);
+  api('/api/version').then((v) => { const b = $('#build'); if (b) b.textContent = `Build ${v.build}`; }).catch(() => {});
   connectStream();
   window.onhashchange = () => route();
   route();
@@ -772,7 +774,7 @@ function renderSettings(el) {
     body.innerHTML = `<div class="card-head"><h3 style="font-size:17px">${esc(def.title)}</h3></div>
       <p class="section-desc">${esc(def.desc)}</p>
       <form id="s-form"><div class="form-grid">${def.fields.map(fieldHtml).join('')}</div>
-      <div class="form-actions"><button class="btn primary" type="submit">Save</button>${def.test ? '<button class="btn" type="button" id="s-test">Test connection</button>' : ''}${section === 'stats' && vals.mode === 'postgres' ? `${vals.databaseUrl !== '__SET__' ? '<button class="btn" type="button" id="s-fetchdb">Fetch from Railway</button>' : ''}<button class="btn" type="button" id="s-detect">Detect from database</button>` : ''}<span class="form-msg" id="s-msg"></span></div></form>
+      <div class="form-actions"><button class="btn primary" type="submit">Save</button>${def.test ? '<button class="btn" type="button" id="s-test">Test connection</button>' : ''}${section === 'stats' ? `<button class="btn" type="button" id="s-fetchdb">${vals.databaseUrl === '__SET__' ? 'Re-fetch' : 'Fetch'} database URL from Railway</button>${vals.mode === 'postgres' ? '<button class="btn" type="button" id="s-detect">Detect from database</button>' : ''}` : ''}<span class="form-msg" id="s-msg"></span></div></form>
       <div id="s-detect-out"></div>`;
     const collect = () => {
       const out = {};

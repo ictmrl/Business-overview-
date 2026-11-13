@@ -4,6 +4,7 @@ import session from 'express-session';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
 import { authRouter, requireAuth } from './auth.js';
 import { getSettings, getPublicSettings, updateSection, DATA_DIR, SECRET_FIELDS, getState, save } from './store.js';
 import { demoStats, demoInfra, demoMail } from './sources/demo.js';
@@ -164,6 +165,22 @@ mail.setOnNewMail(() => setTimeout(async () => { await tick(); broadcast('mail',
 const api = express.Router();
 api.use(requireAuth);
 
+// Short git commit of the running code, so it's easy to confirm a pull took effect.
+function buildId() {
+  try {
+    const git = path.join(__dirname, '../.git');
+    let head = fs.readFileSync(path.join(git, 'HEAD'), 'utf8').trim();
+    if (head.startsWith('ref: ')) {
+      const ref = head.slice(5);
+      const loose = path.join(git, ref);
+      head = fs.existsSync(loose) ? fs.readFileSync(loose, 'utf8').trim()
+        : (fs.readFileSync(path.join(git, 'packed-refs'), 'utf8').split('\n').find((l) => l.endsWith(' ' + ref)) || '').split(' ')[0];
+    }
+    return head.slice(0, 7) || 'dev';
+  } catch { return 'dev'; }
+}
+const BUILD = buildId();
+api.get('/version', (req, res) => res.json({ build: BUILD }));
 api.get('/snapshot', async (req, res) => res.json(snapshot.updatedAt ? snapshot : await collect()));
 api.post('/refresh', async (req, res) => { resetStripeCache(); res.json(await collect()); });
 
@@ -280,10 +297,10 @@ app.use('/api', api);
 
 // Static frontend
 app.use('/vendor/webauthn.js', express.static(path.join(__dirname, '../node_modules/@simplewebauthn/browser/dist/bundle/index.umd.min.js')));
-app.use(express.static(path.join(__dirname, '../public'), { extensions: ['html'] }));
+app.use(express.static(path.join(__dirname, '../public'), { extensions: ['html'], setHeaders: (res) => res.set('Cache-Control', 'no-cache') }));
 app.get(/^\/(?!api\/).*/, (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 
 app.listen(PORT, HOST, () => {
-  console.log(`\n  Tutorise Dashboard running → http://localhost:${PORT}\n  Data directory: ${DATA_DIR}\n`);
+  console.log(`\n  Tutorise Dashboard running → http://localhost:${PORT}  (build ${BUILD})\n  Data directory: ${DATA_DIR}\n`);
   restartLoop();
 });
