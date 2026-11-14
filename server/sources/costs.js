@@ -3,7 +3,6 @@
 // an *admin* key. Amounts arrive in USD and are converted with the rate set in
 // Settings → Costs. Data lags a few hours, so the month-end estimate projects
 // from where each provider's data actually ends.
-import Anthropic from '@anthropic-ai/sdk';
 
 const DAY = 86_400_000;
 const isoDay = (t) => new Date(t).toISOString().slice(0, 10);
@@ -13,6 +12,10 @@ export const costsConfigured = (cfg) => !!(cfg.anthropicAdminKey || cfg.openaiAd
 
 /** Daily USD for the last 31 days from Anthropic. Returns { byDay, dataEnd }. */
 async function anthropicDaily(key, start, end) {
+  // Loaded on demand: only needed for the optional admin-key billing check.
+  let Anthropic;
+  try { ({ default: Anthropic } = await import('@anthropic-ai/sdk')); }
+  catch { throw new Error('The Anthropic library isn’t installed — run “npm install” in the dashboard folder'); }
   const client = new Anthropic({ apiKey: key, maxRetries: 1, timeout: 20_000 });
   const byDay = {};
   let page = await client.beta.organization.analytics.cost.list({

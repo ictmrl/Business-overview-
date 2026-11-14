@@ -6,6 +6,7 @@
   "type": "module",
   "main": "server/index.js",
   "scripts": {
+    "prestart": "node scripts/ensure-deps.js",
     "start": "node server/index.js",
     "dev": "node --watch server/index.js"
   },
