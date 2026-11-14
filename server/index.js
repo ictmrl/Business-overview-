@@ -7,10 +7,11 @@ import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import { authRouter, requireAuth } from './auth.js';
 import { getSettings, getPublicSettings, updateSection, DATA_DIR, SECRET_FIELDS, getState, save } from './store.js';
-import { demoStats, demoInfra, demoMail } from './sources/demo.js';
+import { demoStats, demoInfra, demoMail, demoCosts } from './sources/demo.js';
 import { fetchStats, statsConfigured, detectSchema } from './sources/stats.js';
 import { fetchRailway, railwayConfigured, testRailway, findDatabaseUrl } from './sources/railway.js';
 import { fetchStripe, resetStripeCache } from './sources/stripe.js';
+import { fetchCosts, costsConfigured, resetCostsCache } from './sources/costs.js';
 import { startUptime, uptimeSnapshot, checkAll, parseUrls } from './sources/uptime.js';
 import * as mail from './sources/email.js';
 
@@ -98,6 +99,15 @@ async function collect() {
   } else out.sources.stripe = sourceStatus('off');
   if (out.revenue && !out.revenue.currency) out.revenue.currency = s.general.currency;
 
+  // AI provider costs (month to date + month-end estimate)
+  if (costsConfigured(s.costs)) {
+    try {
+      out.costs = await fetchCosts(s.costs);
+      out.sources.costs = sourceStatus(out.costs.errors.length ? 'error' : 'live', out.costs.errors.join(' · '));
+    } catch (e) { out.sources.costs = sourceStatus('error', e.message); if (demo) out.costs = demoCosts(); }
+  } else if (demo) { out.costs = demoCosts(); out.sources.costs = sourceStatus('demo'); }
+  else out.sources.costs = sourceStatus('off');
+
   // Railway infrastructure
   if (railwayConfigured(s.railway)) {
     try { out.infra = await fetchRailway(s.railway); out.sources.railway = sourceStatus('live'); }
@@ -182,7 +192,7 @@ function buildId() {
 const BUILD = buildId();
 api.get('/version', (req, res) => res.json({ build: BUILD }));
 api.get('/snapshot', async (req, res) => res.json(snapshot.updatedAt ? snapshot : await collect()));
-api.post('/refresh', async (req, res) => { resetStripeCache(); res.json(await collect()); });
+api.post('/refresh', async (req, res) => { resetStripeCache(); resetCostsCache(); res.json(await collect()); });
 
 api.get('/stream', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
@@ -201,6 +211,7 @@ api.put('/settings/:section', async (req, res) => {
     updateSection(req.params.section, req.body);
     if (req.params.section === 'email') await mail.disconnectEmail();
     if (req.params.section === 'stripe') resetStripeCache();
+    if (req.params.section === 'costs') resetCostsCache();
     restartLoop();
     res.json({ ok: true, settings: getPublicSettings() });
   } catch (e) { res.status(400).json({ error: e.message }); }
@@ -253,6 +264,11 @@ api.post('/settings/:section/test', async (req, res) => {
       const found = ['subscribers', 'active', 'usage', 'revenue', 'ai'].filter((k) => r[k]);
       const sb = r.subscribers || {};
       message = `Connected — received ${found.join(', ') || 'no recognised sections'}. Subscribers: ${sb.total ?? '—'} total (${sb.paid ?? '—'} paid, ${sb.trialing ?? '—'} on trial)` + (r._queryErrors ? `. Query errors: ${Object.entries(r._queryErrors).map(([k, v]) => `${k}: ${v}`).join('; ')}` : '');
+    } else if (section === 'costs') {
+      const r = await fetchCosts(cfg, { force: true });
+      resetCostsCache();
+      const parts = r.byProvider.map((p) => `${p.name} £${p.mtd.toFixed(2)} so far`);
+      message = `Connected — ${parts.join(', ')}; estimated £${r.projected.toFixed(2)} for the month` + (r.errors.length ? `. Problems: ${r.errors.join(' · ')}` : '');
     } else if (section === 'stripe') { resetStripeCache(); const r = await fetchStripe(cfg); message = `Connected — MRR ${r.currency} ${r.mrr.toFixed(2)}, ${r.payingSubscribers} paying and ${r.trialingSubscribers} trialing subscriptions`; resetStripeCache(); }
     else if (section === 'email') message = await mail.testEmail(cfg);
     else if (section === 'uptime') { const urls = parseUrls(cfg.urls); await checkAll(urls); message = `Checked ${urls.length} URLs`; }

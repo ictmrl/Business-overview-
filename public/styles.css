@@ -467,3 +467,15 @@ details.queries summary { cursor: pointer; color: var(--text-2); margin: 6px 0 1
 .split .free { background: var(--series-3); }
 .split .inactive { background: var(--muted); }
 .split-legend i.none, .split-bar i.none { background: var(--muted); opacity: .35; }
+
+/* AI costs block inside the revenue card */
+.cost-block { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--surface-2) 80%, transparent); border: 1px solid var(--border); display: grid; gap: 5px; position: relative; z-index: 1; cursor: pointer; transition: border-color .15s; }
+.cost-block:hover, .cost-block:focus-visible { border-color: var(--series-2); outline: none; }
+.cost-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; color: var(--text-2); gap: 8px; }
+.cost-row b { color: var(--text); font-size: 15px; font-weight: 650; }
+.cost-bar { height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; margin: 2px 0; }
+.cost-bar i { display: block; height: 100%; width: 0; border-radius: 3px; background: var(--series-2); transition: width 1.1s cubic-bezier(.2,.8,.2,1); }
+.cost-note { font-size: 11.5px; color: var(--muted); }
+.cost-note .pos, .cost-note .neg { white-space: nowrap; }
+.cost-note .pos { color: var(--good-text); font-weight: 600; }
+.cost-note .neg { color: var(--bad-text); font-weight: 600; }

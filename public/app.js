@@ -255,7 +255,7 @@ function route(force) {
 
 // ------------------------------------------------------------------ shared bits
 function sourceChips(snap) {
-  const names = { stats: 'Business data', railway: 'Railway', stripe: 'Stripe', uptime: 'Uptime', email: 'Email' };
+  const names = { stats: 'Business data', railway: 'Railway', stripe: 'Stripe', costs: 'AI costs', uptime: 'Uptime', email: 'Email' };
   const map = { live: ['good', 'Live'], demo: ['demo', 'Demo'], error: ['critical', 'Error'], off: ['neutral', 'Not set'] };
   return Object.entries(names).map(([k, n]) => {
     const s = snap.sources?.[k] || { state: 'off' };
@@ -353,7 +353,14 @@ function renderOverview(el) {
     <div class="grid g-4">
       <button class="card hero lead" data-metric="subscribers" style="--c:var(--series-1)"><div class="label"><i>${I.users}</i>Subscribers <span class="muted" style="font-weight:400">paid + trial</span></div><div class="value" id="h-subs">—</div><div class="split" id="h-subs-split"></div><div class="meta" id="h-subs-m"></div><div class="spark-wrap" id="h-subs-s"></div></button>
       <button class="card hero" data-metric="active" style="--c:var(--series-3)"><div class="label"><i>${I.activity}</i>Active users today</div><div class="value" id="h-act">—</div><div class="meta" id="h-act-who"></div><div class="meta" id="h-act-m"></div><div class="spark-wrap" id="h-act-s"></div></button>
-      <button class="card hero" data-metric="revenue" style="--c:var(--series-7)"><div class="label"><i>${I.pound}</i>Monthly recurring revenue</div><div class="value" id="h-mrr">—</div><div class="meta" id="h-mrr-m"></div><div class="spark-wrap" id="h-mrr-s"></div></button>
+      <button class="card hero" data-metric="revenue" style="--c:var(--series-7)"><div class="label"><i>${I.pound}</i>Monthly recurring revenue</div><div class="value" id="h-mrr">—</div><div class="meta" id="h-mrr-m"></div>
+        <div class="cost-block" id="h-cost" hidden role="button" tabindex="0" title="Show daily AI costs in the chart below">
+          <div class="cost-row"><span>AI costs this month</span><b id="h-cost-mtd">—</b></div>
+          <div class="cost-row"><span>Estimated for the month</span><b id="h-cost-est">—</b></div>
+          <div class="cost-bar" aria-hidden="true"><i id="h-cost-bar"></i></div>
+          <div class="cost-note" id="h-cost-note"></div>
+        </div>
+        <div class="spark-wrap" id="h-mrr-s"></div></button>
       <button class="card hero" data-metric="uptime" style="--c:var(--series-4)"><div class="label"><i>${I.shield}</i>Uptime (24h)</div><div class="value" id="h-up">—</div><div class="meta" id="h-up-m"></div><div class="spark-wrap" id="h-up-s" style="padding:8px 20px 14px;height:auto"></div></button>
     </div>
     <div class="card" id="accounts-card">
@@ -411,6 +418,9 @@ function renderOverview(el) {
     <div style="display:flex;gap:8px;flex-wrap:wrap" id="chips"></div>
   </div>`;
 
+  const showCosts = (e) => { e.stopPropagation(); metric = 'costs'; first = true; drawMain(state.snap); };
+  $('#h-cost', el).addEventListener('click', showCosts);
+  $('#h-cost', el).addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showCosts(e); } });
   $$('.hero', el).forEach((h) => (h.onclick = () => {
     if (h.dataset.metric === 'uptime') { location.hash = 'infra'; return; }
     metric = h.dataset.metric; first = true; drawMain(state.snap);
@@ -421,11 +431,12 @@ function renderOverview(el) {
 
   function drawMain(snap) {
     if (!snap) return;
-    $$('.hero', el).forEach((h) => h.classList.toggle('selected', h.dataset.metric === metric));
+    $$('.hero', el).forEach((h) => h.classList.toggle('selected', h.dataset.metric === metric || (metric === 'costs' && h.dataset.metric === 'revenue')));
     const cur = snap.revenue?.currency || 'GBP';
     const cfg = {
       subscribers: { title: 'Subscribers', sub: 'total active subscriptions', data: snap.subscribers?.history, color: 'var(--series-1)', fmt: int, zero: false },
       active: { title: 'Active customers', sub: 'daily active users', data: snap.active?.history, color: 'var(--series-3)', fmt: int, zero: false },
+      costs: { title: 'AI costs', sub: 'daily spend, Anthropic + OpenAI (converted to £)', data: snap.costs?.history, color: 'var(--series-2)', fmt: (v) => money(v, 'GBP', 2), axis: true },
       revenue: { title: 'Revenue', sub: 'daily collected revenue', data: snap.revenue?.history, color: 'var(--series-7)', fmt: (v) => money(v, cur, 2), axis: (v) => money(v, cur).replace(/\.00$/, '') },
     }[metric];
     $('#main-title', el).textContent = cfg.title;
@@ -456,6 +467,22 @@ function renderOverview(el) {
     $('#ac-subs-n', el).textContent = ratio && perParent ? (Math.abs(perParent - ratio) / ratio < 0.15 ? 'looks like one per child' : perParent <= 1.15 ? 'looks like one per family' : '') : '';
   }
 
+  function drawCosts(snap) {
+    const c = snap.costs, box = $('#h-cost', el);
+    box.hidden = !c;
+    if (!c) return;
+    countUp($('#h-cost-mtd', el), c.mtd, (n) => money(n, 'GBP'));
+    countUp($('#h-cost-est', el), c.projected, (n) => money(n, 'GBP'));
+    requestAnimationFrame(() => ($('#h-cost-bar', el).style.width = `${c.projected ? Math.min(100, (c.mtd / c.projected) * 100) : 0}%`));
+    const parts = (c.byProvider || []).map((p) => `${p.name} ${money(p.mtd, 'GBP')}`);
+    const mrr = snap.revenue?.mrr;
+    const margin = mrr != null && c.projected != null ? mrr - c.projected : null;
+    const marginHtml = margin == null ? '' : `<span class="${margin >= 0 ? 'pos' : 'neg'}" title="MRR minus the estimated AI costs for this month">MRR after AI costs ${money(margin, 'GBP')}</span>`;
+    const asOf = c.dataThrough ? `data to ${new Date(c.dataThrough).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '';
+    $('#h-cost-note', el).innerHTML = [esc(parts.join(' · ')), marginHtml].filter(Boolean).join(' · ');
+    box.title = `Show daily AI costs in the chart below${asOf ? ` (${asOf}; converted at $1 = £${c.usdToGbp})` : ''}`;
+  }
+
   function update(snap, why) {
     $('#ov-banner', el).innerHTML = demoBanner(snap);
     $('#chips', el).innerHTML = sourceChips(snap);
@@ -477,6 +504,7 @@ function renderOverview(el) {
       countUp($('#h-mrr', el), snap.revenue?.mrr, (n) => money(n, cur));
       $('#h-mrr-m', el).innerHTML = snap.revenue ? `<span>${money(snap.revenue.month, cur)} this month</span>` : '';
       sparkline($('#h-mrr-s', el), (snap.revenue?.history || []).map((d) => d.value), { color: 'var(--series-7)', animate: isInit });
+      drawCosts(snap);
 
       drawAccounts(snap);
       drawMain(snap);
@@ -783,6 +811,14 @@ const SECTIONS = {
     title: 'Stripe (optional)', desc: 'If set, MRR and revenue come straight from Stripe and override the business data source. Use a restricted key with read access to Subscriptions and Charges.', test: true,
     fields: [{ k: 'secretKey', label: 'Restricted API key (rk_live_…)', secret: true, full: true }],
   },
+  costs: {
+    title: 'AI costs', desc: 'Month-to-date AI spend and an estimate for the whole month, shown on the overview’s revenue card. Each provider needs an admin key (a normal API key can’t read billing). Anthropic: Console → Settings → Admin keys (sk-ant-admin…). OpenAI: Platform → Settings → Organization → Admin keys (sk-admin…). Costs arrive in US dollars and are converted at the rate below; provider data usually lags a few hours.', test: true,
+    fields: [
+      { k: 'anthropicAdminKey', label: 'Anthropic Admin API key', secret: true, full: true },
+      { k: 'openaiAdminKey', label: 'OpenAI admin key', secret: true, full: true },
+      { k: 'usdToGbp', label: 'USD → GBP rate', type: 'number', hint: 'e.g. 0.79 means $1 = £0.79' },
+    ],
+  },
   email: {
     title: 'Email', desc: 'Your IMAP inbox appears in the dashboard and updates instantly via IMAP IDLE. Replies go out over SMTP. For iCloud, Gmail or Fastmail use an app-specific password.', test: true,
     fields: [
@@ -822,7 +858,7 @@ function renderSettings(el) {
 
   async function load() { data = await api('/api/settings'); draw(); }
   function statusDot() {
-    const map = { railway: 'railway', stats: 'stats', stripe: 'stripe', email: 'email', uptime: 'uptime' };
+    const map = { railway: 'railway', stats: 'stats', stripe: 'stripe', costs: 'costs', email: 'email', uptime: 'uptime' };
     for (const [k, src] of Object.entries(map)) {
       const s = state.snap?.sources?.[src]?.state;
       const n = $(`#sn-${k}`, el);
@@ -849,7 +885,7 @@ function renderSettings(el) {
         <p class="hint" style="margin-top:0">Single-number queries must return a column named <code>value</code>. History queries return <code>date</code> + <code>value</code> rows. <code>usageByHour</code> returns <code>hour</code> + <code>value</code>. Leave a query blank to skip it.</p>
         ${Object.entries(v).map(([qk, qv]) => `<div class="field"><label for="q-${qk}">${esc(qk)}</label><textarea id="q-${qk}" data-q="${esc(qk)}" rows="2">${esc(qv)}</textarea></div>`).join('')}</details>`;
       if (f.secret) return `<div class="${cls}"><label for="${id}">${esc(f.label)}</label><input type="password" id="${id}" autocomplete="off" placeholder="${v === '__SET__' ? '•••••••• saved — leave blank to keep' : ''}">${hint}</div>`;
-      return `<div class="${cls}"><label for="${id}">${esc(f.label)}</label><input type="${f.type === 'number' ? 'number' : 'text'}" id="${id}" value="${esc(v)}">${hint}</div>`;
+      return `<div class="${cls}"><label for="${id}">${esc(f.label)}</label><input type="${f.type === 'number' ? 'number' : 'text'}" ${f.type === 'number' ? 'step="any"' : ''} id="${id}" value="${esc(v)}">${hint}</div>`;
     };
     body.innerHTML = `<div class="card-head"><h3 style="font-size:17px">${esc(def.title)}</h3></div>
       <p class="section-desc">${esc(def.desc)}</p>

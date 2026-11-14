@@ -44,6 +44,7 @@ export const SECRET_FIELDS = {
   railway: ['token'],
   stats: ['apiToken', 'databaseUrl'],
   stripe: ['secretKey'],
+  costs: ['anthropicAdminKey', 'openaiAdminKey'],
   email: ['imapPassword', 'smtpPassword'],
 };
 
@@ -92,6 +93,7 @@ export const DEFAULT_SETTINGS = {
     },
   },
   stripe: { secretKey: '' },
+  costs: { anthropicAdminKey: '', openaiAdminKey: '', usdToGbp: 0.79 },
   uptime: { urls: 'https://tutorise.uk\nhttps://www.tutorise.uk', intervalSeconds: 60 },
   email: {
     imapHost: '', imapPort: 993, imapSecure: true, imapUser: '', imapPassword: '', mailbox: 'INBOX',

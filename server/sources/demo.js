@@ -140,3 +140,18 @@ export const demoMail = {
   markSeen: (uid) => { const m = demoMessages.find((x) => x.uid === Number(uid)); if (m) m.seen = true; },
   markAnswered: (uid) => { const m = demoMessages.find((x) => x.uid === Number(uid)); if (m) m.answered = true; },
 };
+
+export function demoCosts() {
+  const day = new Date().getUTCDate();
+  const daysInMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 0)).getUTCDate();
+  const history = series(31, 9, 0.004, 3).map((d) => ({ ...d, value: Math.round(d.value * 100) / 100 }));
+  const mtdA = Math.round(history.slice(-day).reduce((t, d) => t + d.value * 0.72, 0) * 100) / 100;
+  const mtdO = Math.round(history.slice(-day).reduce((t, d) => t + d.value * 0.28, 0) * 100) / 100;
+  const rate = history.slice(-8, -1).reduce((t, d) => t + d.value, 0) / 7;
+  const projected = Math.round((mtdA + mtdO + rate * (daysInMonth - day + 0.5)) * 100) / 100;
+  return {
+    currency: 'GBP', usdToGbp: 0.79, mtd: Math.round((mtdA + mtdO) * 100) / 100, projected, dailyRate: Math.round(rate * 100) / 100,
+    byProvider: [{ name: 'Anthropic', mtd: mtdA, projected: Math.round(projected * 0.72 * 100) / 100 }, { name: 'OpenAI', mtd: mtdO, projected: Math.round(projected * 0.28 * 100) / 100 }],
+    history, dataThrough: new Date(Date.now() - 3 * 3_600_000).toISOString(), errors: [],
+  };
+}
