@@ -11,7 +11,7 @@ import { demoStats, demoInfra, demoMail, demoCosts } from './sources/demo.js';
 import { fetchStats, statsConfigured, detectSchema } from './sources/stats.js';
 import { fetchRailway, railwayConfigured, testRailway, findDatabaseUrl } from './sources/railway.js';
 import { fetchStripe, resetStripeCache } from './sources/stripe.js';
-import { fetchCosts, costsConfigured, resetCostsCache } from './sources/costs.js';
+import { fetchCosts, costsConfigured, resetCostsCache, costsFromStats } from './sources/costs.js';
 import { startUptime, uptimeSnapshot, checkAll, parseUrls } from './sources/uptime.js';
 import * as mail from './sources/email.js';
 
@@ -99,14 +99,27 @@ async function collect() {
   } else out.sources.stripe = sourceStatus('off');
   if (out.revenue && !out.revenue.currency) out.revenue.currency = s.general.currency;
 
-  // AI provider costs (month to date + month-end estimate)
+  // AI costs: Tutorise's own figures first (no admin keys needed). Provider
+  // billing APIs are optional — on their own, or as a check alongside Tutorise.
+  const fromTutorise = stats.costsRaw ? costsFromStats(stats.costsRaw, s.costs) : null;
+  delete out.costsRaw;
+  let billing = null, billingError = '';
   if (costsConfigured(s.costs)) {
-    try {
-      out.costs = await fetchCosts(s.costs);
-      out.sources.costs = sourceStatus(out.costs.errors.length ? 'error' : 'live', out.costs.errors.join(' · '));
-    } catch (e) { out.sources.costs = sourceStatus('error', e.message); if (demo) out.costs = demoCosts(); }
-  } else if (demo) { out.costs = demoCosts(); out.sources.costs = sourceStatus('demo'); }
-  else out.sources.costs = sourceStatus('off');
+    try { billing = await fetchCosts(s.costs); billingError = billing.errors.join(' · '); }
+    catch (e) { billingError = e.message; }
+  }
+  if (fromTutorise) {
+    out.costs = fromTutorise;
+    if (billing) out.costs.billing = { mtd: billing.mtd, projected: billing.projected, dataThrough: billing.dataThrough, byProvider: billing.byProvider };
+    out.sources.costs = sourceStatus(billingError ? 'error' : 'live', billingError ? `Tutorise OK; provider billing check: ${billingError}` : '');
+  } else if (billing) {
+    out.costs = { ...billing, source: 'billing' };
+    out.sources.costs = sourceStatus(billingError ? 'error' : 'live', billingError);
+  } else if (billingError) {
+    out.sources.costs = sourceStatus('error', billingError);
+    if (demo) out.costs = demoCosts();
+  } else if (demo && out.sources.stats?.state !== 'live') { out.costs = demoCosts(); out.sources.costs = sourceStatus('demo'); }
+  else out.sources.costs = sourceStatus('off', out.sources.stats?.state === 'live' ? 'Tutorise isn’t sending a “costs” section yet' : '');
 
   // Railway infrastructure
   if (railwayConfigured(s.railway)) {

@@ -152,6 +152,7 @@ export function demoCosts() {
   return {
     currency: 'GBP', usdToGbp: 0.79, mtd: Math.round((mtdA + mtdO) * 100) / 100, projected, dailyRate: Math.round(rate * 100) / 100,
     byProvider: [{ name: 'Anthropic', mtd: mtdA, projected: Math.round(projected * 0.72 * 100) / 100 }, { name: 'OpenAI', mtd: mtdO, projected: Math.round(projected * 0.28 * 100) / 100 }],
-    history, dataThrough: new Date(Date.now() - 3 * 3_600_000).toISOString(), errors: [],
+    byFeature: [{ name: 'Tutor chat', mtd: Math.round((mtdA + mtdO) * 0.61 * 100) / 100 }, { name: 'AI challenges', mtd: Math.round((mtdA + mtdO) * 0.24 * 100) / 100 }, { name: 'Marking', mtd: Math.round((mtdA + mtdO) * 0.15 * 100) / 100 }],
+    source: 'tutorise', history, dataThrough: new Date().toISOString(), errors: [],
   };
 }

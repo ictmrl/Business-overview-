@@ -63,6 +63,14 @@ arrays are daily, oldest first, ideally the last 30 days.
     "month": 3644,
     "history": [{ "date": "2026-10-14", "value": 410.5 }]
   },
+  "costs": {                 // AI spend logged by Tutorise from each call's token usage
+    "currency": "USD",       // USD (converted with the rate in Settings) or GBP
+    "mtd": 191.00,           // month to date
+    "today": 6.20,
+    "byProvider": [{ "name": "Anthropic", "mtd": 135.00 }, { "name": "OpenAI", "mtd": 56.00 }],
+    "byFeature":  [{ "name": "Tutor chat", "mtd": 118.00 }, { "name": "AI challenges", "mtd": 45.00 }],
+    "history": [{ "date": "2026-11-01", "value": 7.40 }]   // daily, oldest first, last 31 days
+  },
   "ai": {                    // AI challenges raised against AI tutor responses
     "total": 1645,           // all time
     "today": 4,
@@ -86,6 +94,13 @@ arrays are daily, oldest first, ideally the last 30 days.
   }
 }
 ```
+
+**AI costs.** Log the token usage returned with every Anthropic/OpenAI call
+(input, output, cache read/write) and price it from a table kept in one config
+file. The dashboard projects the month-end total from `history` (month to date
+plus the last 7 days' average per remaining day). No provider admin keys are
+needed; if you add them in Settings → AI costs anyway, the card also shows the
+providers' billed figure as a check.
 
 **AI challenge types.** The dashboard always shows these nine, in this order:
 Response unsure, Content drift, Reported errors, Reversals, Rule breaks,

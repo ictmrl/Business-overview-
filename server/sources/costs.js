@@ -112,3 +112,33 @@ export async function fetchCosts(cfg, { force = false } = {}) {
   return data;
 }
 export const resetCostsCache = () => (cache = { at: 0, key: '', data: null });
+
+/**
+ * Costs reported by Tutorise itself (the stats endpoint's `costs` section),
+ * converted to GBP and projected to month end the same way as provider data.
+ * Tutorise logs costs as calls happen, so its data runs up to "now".
+ */
+export function costsFromStats(raw, cfg, now = Date.now()) {
+  const fx = (raw.currency || 'USD').toUpperCase() === 'GBP' ? 1 : Number(cfg.usdToGbp) > 0 ? Number(cfg.usdToGbp) : 1;
+  const byDay = Object.fromEntries((raw.history || []).map((d) => [String(d.date).slice(0, 10), Number(d.value) || 0]));
+  const sum = summarise('Tutorise', { byDay, dataEnd: null }, now);
+  const mtd = raw.mtd != null ? Number(raw.mtd) : sum.mtd;
+  const n = new Date(now);
+  const remainingDays = Math.max(0, (Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 1) - now) / DAY);
+  const conv = (v) => Math.round(Number(v || 0) * fx * 100) / 100;
+  const pairs = (xs) => (xs || []).map((x) => ({ name: String(x.name ?? 'Other'), mtd: conv(x.mtd ?? x.value) }));
+  return {
+    source: 'tutorise',
+    currency: 'GBP',
+    usdToGbp: fx,
+    mtd: conv(mtd),
+    today: raw.today != null ? conv(raw.today) : undefined,
+    dailyRate: conv(sum.dailyRate),
+    projected: conv(mtd + sum.dailyRate * remainingDays),
+    byProvider: pairs(raw.byProvider),
+    byFeature: pairs(raw.byFeature).sort((a, b) => b.mtd - a.mtd),
+    history: (raw.history || []).map((d) => ({ date: String(d.date).slice(0, 10), value: conv(d.value) })),
+    dataThrough: new Date(now).toISOString(),
+    errors: [],
+  };
+}

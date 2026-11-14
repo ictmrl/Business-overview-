@@ -66,6 +66,14 @@ for the last 30 days, with dates as "YYYY-MM-DD".
     "month": 0,
     "history": [{ "date": "2026-10-15", "value": 0 }]
   },
+  "costs": {                 // AI spend logged by Tutorise from each call's token usage
+    "currency": "USD",       // USD (converted with the rate in Settings) or GBP
+    "mtd": 0,           // month to date
+    "today": 0,
+    "byProvider": [{ "name": "Anthropic", "mtd": 0 }, { "name": "OpenAI", "mtd": 0 }],
+    "byFeature":  [{ "name": "Tutor chat", "mtd": 0 }, { "name": "AI challenges", "mtd": 0 }],
+    "history": [{ "date": "2026-11-01", "value": 0 }]   // daily, oldest first, last 31 days
+  },
   "ai": {                    // AI challenges raised against AI tutor responses
     "total": 0,           // all time
     "today": 0,
@@ -96,6 +104,11 @@ Requirements:
 - Don't include emails, surnames, payment details or any other personal data.
 - If revenue lives only in Stripe, it's fine to omit "revenue" (the dashboard
   can read Stripe directly).
+- "costs": log the model, token counts from each response's usage (input,
+  output, cache read/write) and feature for every Anthropic and OpenAI call in an
+  ai_usage table; price each call from one config file of per-million-token
+  prices (with cache/batch rates and a last-checked date). Don't add provider
+  admin keys.
 - "ai" is about AI challenges raised against AI tutor responses, grouped by
   type: Response unsure, Content drift, Reported errors, Reversals, Rule breaks,
   Unsupported claims, Board claims, Verifier findings, Educator. Return every

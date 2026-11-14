@@ -39,7 +39,7 @@ On first launch you create the owner account, then you're prompted to add a pass
 |---|---|
 | **Railway** | An account/team token (Account → Tokens) or a project token, plus the project ID. Shows services, latest deployment status, CPU and memory. |
 | **Business data** | Either an admin stats endpoint on the Tutorise backend ([contract + example route](docs/stats-endpoint.md); if tutora uses SQLite, use the [ready-made Claude Code prompt](docs/tutora-stats-endpoint-prompt.md)), or the Railway Postgres `DATABASE_PUBLIC_URL` with editable SQL queries. Drives subscribers, active customers, usage, revenue and AI challenges. |
-| **AI costs** *(optional)* | Admin keys for Anthropic (`sk-ant-admin…`) and/or OpenAI (`sk-admin…`). Adds month-to-date AI spend, an estimate for the whole month and MRR after AI costs to the revenue card; click it to chart daily costs. Converted from USD at the rate you set. |
+| **AI costs** | Normally sent by Tutorise in its stats endpoint (`costs` section), so no extra keys. Optionally add Anthropic/OpenAI admin keys to compare against what the providers bill. Adds month-to-date AI spend, an estimate for the whole month and MRR after AI costs to the revenue card; click it to chart daily costs. Converted from USD at the rate you set. |
 | **Stripe** *(optional)* | A restricted read-only key. When set, MRR and revenue come from Stripe. |
 | **Email** | IMAP host/user/app-password, plus SMTP for replies. iCloud: `imap.mail.me.com:993` / `smtp.mail.me.com:587` (untick TLS for 587), using an app-specific password from appleid.apple.com. |
 | **Uptime** | URLs to ping from your Mac, e.g. `https://tutorise.uk` and your API health route. |

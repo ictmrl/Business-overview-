@@ -436,7 +436,7 @@ function renderOverview(el) {
     const cfg = {
       subscribers: { title: 'Subscribers', sub: 'total active subscriptions', data: snap.subscribers?.history, color: 'var(--series-1)', fmt: int, zero: false },
       active: { title: 'Active customers', sub: 'daily active users', data: snap.active?.history, color: 'var(--series-3)', fmt: int, zero: false },
-      costs: { title: 'AI costs', sub: 'daily spend, Anthropic + OpenAI (converted to £)', data: snap.costs?.history, color: 'var(--series-2)', fmt: (v) => money(v, 'GBP', 2), axis: true },
+      costs: { title: 'AI costs', sub: snap.costs?.source === 'billing' ? 'daily spend from provider billing (converted to £)' : 'daily spend logged by Tutorise (converted to £)', data: snap.costs?.history, color: 'var(--series-2)', fmt: (v) => money(v, 'GBP', 2), axis: true },
       revenue: { title: 'Revenue', sub: 'daily collected revenue', data: snap.revenue?.history, color: 'var(--series-7)', fmt: (v) => money(v, cur, 2), axis: (v) => money(v, cur).replace(/\.00$/, '') },
     }[metric];
     $('#main-title', el).textContent = cfg.title;
@@ -475,12 +475,17 @@ function renderOverview(el) {
     countUp($('#h-cost-est', el), c.projected, (n) => money(n, 'GBP'));
     requestAnimationFrame(() => ($('#h-cost-bar', el).style.width = `${c.projected ? Math.min(100, (c.mtd / c.projected) * 100) : 0}%`));
     const parts = (c.byProvider || []).map((p) => `${p.name} ${money(p.mtd, 'GBP')}`);
+    const top = (c.byFeature || [])[0];
+    if (top) parts.push(`top: ${top.name} ${money(top.mtd, 'GBP')}`);
+    if (c.billing) parts.push(`billed so far ${money(c.billing.mtd, 'GBP')}`);
     const mrr = snap.revenue?.mrr;
     const margin = mrr != null && c.projected != null ? mrr - c.projected : null;
     const marginHtml = margin == null ? '' : `<span class="${margin >= 0 ? 'pos' : 'neg'}" title="MRR minus the estimated AI costs for this month">MRR after AI costs ${money(margin, 'GBP')}</span>`;
     const asOf = c.dataThrough ? `data to ${new Date(c.dataThrough).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '';
     $('#h-cost-note', el).innerHTML = [esc(parts.join(' · ')), marginHtml].filter(Boolean).join(' · ');
-    box.title = `Show daily AI costs in the chart below${asOf ? ` (${asOf}; converted at $1 = £${c.usdToGbp})` : ''}`;
+    const feats = (c.byFeature || []).map((f) => `${f.name}: ${money(f.mtd, 'GBP', 2)}`).join('\n');
+    const src = c.source === 'billing' ? `From provider billing (${asOf})` : 'Logged by Tutorise as calls happen';
+    box.title = `Show daily AI costs in the chart below\n${src}; $1 = £${c.usdToGbp}${feats ? `\n\nBy feature this month:\n${feats}` : ''}${c.billing ? `\n\nProvider billing check: ${money(c.billing.mtd, 'GBP', 2)} so far (lags a few hours)` : ''}`;
   }
 
   function update(snap, why) {
@@ -812,11 +817,11 @@ const SECTIONS = {
     fields: [{ k: 'secretKey', label: 'Restricted API key (rk_live_…)', secret: true, full: true }],
   },
   costs: {
-    title: 'AI costs', desc: 'Month-to-date AI spend and an estimate for the whole month, shown on the overview’s revenue card. Each provider needs an admin key (a normal API key can’t read billing). Anthropic: Console → Settings → Admin keys (sk-ant-admin…). OpenAI: Platform → Settings → Organization → Admin keys (sk-admin…). Costs arrive in US dollars and are converted at the rate below; provider data usually lags a few hours.', test: true,
+    title: 'AI costs', desc: 'Month-to-date AI spend and an estimate for the whole month, shown on the overview’s revenue card. These normally come from Tutorise itself: add a “costs” section to its stats endpoint (see docs/stats-endpoint.md) and nothing is needed here except the exchange rate. Admin keys are optional: add them only to compare Tutorise’s estimate with what the providers actually bill (admin keys can manage your whole organisation, so leave them out if you don’t need the check). Anthropic: Console → Settings → Admin keys (sk-ant-admin…). OpenAI: Platform → Settings → Organization → Admin keys (sk-admin…).', test: true,
     fields: [
-      { k: 'anthropicAdminKey', label: 'Anthropic Admin API key', secret: true, full: true },
-      { k: 'openaiAdminKey', label: 'OpenAI admin key', secret: true, full: true },
-      { k: 'usdToGbp', label: 'USD → GBP rate', type: 'number', hint: 'e.g. 0.79 means $1 = £0.79' },
+      { k: 'usdToGbp', label: 'USD → GBP rate', type: 'number', hint: 'e.g. 0.79 means $1 = £0.79. Used for Tutorise’s figures and provider billing alike.' },
+      { k: 'anthropicAdminKey', label: 'Anthropic Admin API key (optional)', secret: true, full: true },
+      { k: 'openaiAdminKey', label: 'OpenAI admin key (optional)', secret: true, full: true },
     ],
   },
   email: {

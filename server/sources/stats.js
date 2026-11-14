@@ -16,6 +16,7 @@ const hist = (rows) => (Array.isArray(rows) ? rows.map((r) => ({ date: String(r.
 
 /** Coerce whatever the backend returns into the dashboard's shape. Missing fields stay undefined. */
 export function normalizeStats(raw = {}) {
+  const rawCosts = raw.costs && typeof raw.costs === 'object' ? raw.costs : null;
   const acc = raw.accounts || {}, s = raw.subscribers || {}, a = raw.active || raw.activeCustomers || {}, u = raw.usage || {}, r = raw.revenue || {}, ai = raw.ai || raw.aiChallenges || {};
   const out = {};
   if (Object.keys(s).length) {
@@ -23,6 +24,7 @@ export function normalizeStats(raw = {}) {
     const total = opt(s.total) ?? (paid != null || trialing != null ? (paid || 0) + (trialing || 0) : undefined);
     out.subscribers = { total, paid, trialing, trialsEndingSoon: opt(s.trialsEndingSoon), newToday: opt(s.newToday), newTrialsToday: opt(s.newTrialsToday), churnRate: opt(s.churnRate), history: hist(s.history) };
   }
+  if (rawCosts) out.costsRaw = rawCosts;
   if (Object.keys(acc).length) out.accounts = {
     parents: opt(acc.parents ?? acc.families), students: opt(acc.students ?? acc.children),
     parentsNewToday: opt(acc.parentsNewToday), studentsNewToday: opt(acc.studentsNewToday),
