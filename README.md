@@ -33,6 +33,13 @@ scripts/install-launch-agent.sh --uninstall
 
 On first launch you create the owner account, then you're prompted to add a passkey (Touch ID). After that, the sign-in screen offers your passkey automatically.
 
+## Host it online (Railway)
+
+The same code can run as its own Railway service, reachable from anywhere, with
+extra protections switched on automatically (setup token, single address,
+passkeys only, sign-in lockouts, optional Cloudflare Access). Step-by-step:
+**[DEPLOY.md](DEPLOY.md)**.
+
 ## Connect your data (Settings tab)
 
 | Section | What you need |
@@ -48,7 +55,7 @@ Each section has a **Test connection** button. Sources you haven't configured sh
 
 ## Security
 
-- The server binds to `127.0.0.1` only, so it isn't reachable from your network.
+- On your Mac the server binds to `127.0.0.1` only, so it isn't reachable from your network. Hosted, see DEPLOY.md for what changes.
 - Everything is stored in `~/.tutorise-dashboard/` (`state.json`, mode 600). Tokens, database URLs and email passwords are encrypted with AES-256-GCM using a key kept in `master.key` beside it. Secrets are never sent back to the browser.
 - Sessions use httpOnly, SameSite=strict cookies. Cross-origin writes are rejected, password attempts are rate-limited, and the CSP blocks inline scripts and remote content. HTML emails render in a fully sandboxed iframe with remote images blocked.
 - Prefer read-only credentials: a read-only Postgres role, a restricted Stripe key, and a project-scoped Railway token.

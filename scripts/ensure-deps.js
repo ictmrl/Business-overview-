@@ -10,7 +10,8 @@ const lock = path.join(root, 'package-lock.json');
 const installed = path.join(root, 'node_modules', '.package-lock.json');
 const mtime = (f) => { try { return fs.statSync(f).mtimeMs; } catch { return 0; } };
 
-if (!mtime(installed) || mtime(lock) > mtime(installed)) {
+const hosted = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT_NAME || process.env.DASH_HOSTED === '1';
+if (!hosted && (!mtime(installed) || mtime(lock) > mtime(installed))) {
   console.log('Installing dependencies (package-lock.json changed)…');
   execSync('npm install --omit=dev --no-audit --no-fund', { cwd: root, stdio: 'inherit' });
 }

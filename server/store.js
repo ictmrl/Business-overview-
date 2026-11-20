@@ -3,16 +3,18 @@
 // (override with TUTORISE_DASH_DATA) so nothing sensitive sits in the repo.
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import crypto from 'node:crypto';
+import { DATA_DIR as DIR, MASTER_KEY_HEX } from './config.js';
 
-export const DATA_DIR = process.env.TUTORISE_DASH_DATA || path.join(os.homedir(), '.tutorise-dashboard');
+export const DATA_DIR = DIR;
 fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
 
 const KEY_FILE = path.join(DATA_DIR, 'master.key');
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
 
 function loadKey() {
+  // Hosted: the key comes from an environment variable, never from a file next to the data.
+  if (/^[0-9a-f]{64}$/i.test(MASTER_KEY_HEX)) return Buffer.from(MASTER_KEY_HEX, 'hex');
   if (!fs.existsSync(KEY_FILE)) {
     fs.writeFileSync(KEY_FILE, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
   }

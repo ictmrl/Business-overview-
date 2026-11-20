@@ -93,6 +93,7 @@ function renderAuth() {
       <p>Create the owner account for this dashboard. You'll add a passkey (Touch ID) next.</p>
       <div class="field"><label for="n">Your name</label><input id="n" type="text" required autocomplete="name"></div>
       <div class="field"><label for="e">Email</label><input id="e" type="email" autocomplete="username"></div>
+      ${a.setupTokenRequired ? `<div class="field"><label for="st">Setup token</label><input id="st" type="password" required autocomplete="off"><span class="hint">The DASH_SETUP_TOKEN value from your Railway variables. Only needed once.</span></div>` : ''}
       <div class="field"><label for="p">Password</label><input id="p" type="password" required minlength="10" autocomplete="new-password"><span class="hint">At least 10 characters — used as a fallback to your passkey.</span></div>
       <button class="btn primary block">Create account</button>
       <div class="error-msg" id="err"></div>
@@ -100,7 +101,7 @@ function renderAuth() {
     $('#setup').onsubmit = async (e) => {
       e.preventDefault();
       try {
-        await api('/api/auth/setup', { body: { name: $('#n').value, email: $('#e').value, password: $('#p').value } });
+        await api('/api/auth/setup', { body: { name: $('#n').value, email: $('#e').value, password: $('#p').value, setupToken: $('#st')?.value } });
         await boot();
         if (supportsPasskey) setTimeout(() => offerPasskey(), 600);
       } catch (err) { $('#err').textContent = err.message; }
@@ -111,12 +112,12 @@ function renderAuth() {
     <div class="logo">T</div>
     <h1>Tutorise HQ</h1>
     <p>Sign in to see the business at a glance.</p>
-    ${supportsPasskey ? `<button class="btn primary block" id="pk">${I.key} Sign in with passkey</button><div class="divider">or use your password</div>` : ''}
-    <form id="pw"><div class="field"><label for="p">Password</label><input id="p" type="password" autocomplete="current-password" ${a.hasPasskeys ? '' : 'autofocus'}></div>
-    <button class="btn block">Sign in</button></form>
+    ${supportsPasskey ? `<button class="btn primary block" id="pk">${I.key} Sign in with passkey</button>${a.passwordLogin ? '<div class="divider">or use your password</div>' : ''}` : ''}
+    ${a.passwordLogin ? `<form id="pw"><div class="field"><label for="p">Password</label><input id="p" type="password" autocomplete="current-password" ${a.hasPasskeys ? '' : 'autofocus'}></div>
+    <button class="btn block">Sign in</button></form>` : `<p class="muted" style="font-size:12.5px;margin:14px 0 0">Password sign-in is turned off for this dashboard.</p>`}
     <div class="error-msg" id="err"></div>
   </div></div>`;
-  $('#pw').onsubmit = async (e) => {
+  if ($('#pw')) $('#pw').onsubmit = async (e) => {
     e.preventDefault();
     try { await api('/api/auth/login', { body: { password: $('#p').value } }); boot(); }
     catch (err) { $('#err').textContent = err.message; }
@@ -964,19 +965,26 @@ function renderSettings(el) {
       <h4 style="margin:18px 0 4px">Passkeys</h4>
       <div id="pk-list">${a.passkeys.length ? a.passkeys.map((p) => `<div class="passkey-row">${I.key.replace('<svg', '<svg width="20" height="20"')}<div class="grow" style="flex:1"><div><b>${esc(p.label)}</b></div><div class="muted" style="font-size:12.5px">Added ${new Date(p.createdAt).toLocaleDateString('en-GB')}</div></div><button class="btn sm danger" data-del="${esc(p.id)}">Remove</button></div>`).join('') : '<p class="muted">No passkeys yet.</p>'}</div>
       <div class="form-actions" style="margin-top:10px"><input type="text" id="pk-label" placeholder="Name, e.g. MacBook Pro" style="max-width:260px"><button class="btn primary" id="pk-add">${I.key} Add a passkey</button></div>
+      <label class="check" style="margin-top:22px"><input type="checkbox" id="pk-only" ${a.passkeysOnly ? 'checked' : ''} ${a.passkeys.length ? '' : 'disabled'}> Passkeys only: turn off password sign-in${a.hosted ? ' (recommended for the hosted dashboard)' : ''}</label>
+      <p class="hint muted" style="margin:-8px 0 0;font-size:12px">${a.passkeys.length ? 'Keep at least one passkey on another device (e.g. your iPhone) in case you lose this one. If you’re ever locked out, set DASH_ALLOW_PASSWORD=1 in Railway and redeploy.' : 'Add a passkey first.'}</p>
       <h4 style="margin:30px 0 10px">Change password</h4>
       <form id="pw-form" class="form-grid" style="max-width:560px">
         <div class="field"><label for="pw-c">Current password</label><input type="password" id="pw-c" autocomplete="current-password"></div>
         <div class="field"><label for="pw-n">New password</label><input type="password" id="pw-n" autocomplete="new-password" minlength="10"></div>
         <div class="form-actions full"><button class="btn">Update password</button><span class="form-msg" id="pw-msg"></span></div>
       </form>`;
+    $('#pk-only', body).onchange = async (e) => {
+      try { await api('/api/auth/passkeys-only', { body: { on: e.target.checked } }); toast(e.target.checked ? 'Password sign-in turned off' : 'Password sign-in turned back on'); }
+      catch (err) { e.target.checked = !e.target.checked; toast(err.message); }
+    };
     $('#pk-add', body).onclick = async () => {
       try { await registerPasskey($('#pk-label', body).value || 'Passkey'); toast('Passkey added'); drawSecurity(body); }
       catch (err) { if (err.name !== 'NotAllowedError') toast(err.message); }
     };
     $$('[data-del]', body).forEach((b) => (b.onclick = async () => {
       if (!confirm('Remove this passkey? You can still sign in with your password.')) return;
-      await api(`/api/auth/passkey/${encodeURIComponent(b.dataset.del)}`, { method: 'DELETE' }); drawSecurity(body);
+      try { await api(`/api/auth/passkey/${encodeURIComponent(b.dataset.del)}`, { method: 'DELETE' }); drawSecurity(body); }
+      catch (err) { toast(err.message); }
     }));
     $('#pw-form', body).onsubmit = async (e) => {
       e.preventDefault();

@@ -1,4 +1,5 @@
-// Tutorise Dashboard — local server. Binds to localhost only.
+// Tutorise Dashboard server. On your Mac it binds to localhost only; hosted
+// (Railway) it runs behind HTTPS with the extra protections in config.js.
 import express from 'express';
 import session from 'express-session';
 import crypto from 'node:crypto';
@@ -6,6 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import { authRouter, requireAuth } from './auth.js';
+import { HOSTED, PORT, HOST, PUBLIC_URL, PUBLIC_HOST, TRUST_PROXY_HOPS, SESSION_SECRET, hostedConfigProblems } from './config.js';
+import { cfAccessMiddleware, cfAccessEnabled } from './cfaccess.js';
 import { getSettings, getPublicSettings, updateSection, DATA_DIR, SECRET_FIELDS, getState, save } from './store.js';
 import { demoStats, demoInfra, demoMail, demoCosts } from './sources/demo.js';
 import { fetchStats, statsConfigured, detectSchema } from './sources/stats.js';
@@ -16,24 +19,39 @@ import { startUptime, uptimeSnapshot, checkAll, parseUrls } from './sources/upti
 import * as mail from './sources/email.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT) || 4747;
-const HOST = process.env.HOST || '127.0.0.1';
+const problems = hostedConfigProblems();
+if (problems.length) {
+  console.error('\n  Tutorise Dashboard can\'t start in hosted mode until these are fixed (see DEPLOY.md):\n' + problems.map((x) => '   • ' + x).join('\n') + '\n');
+  process.exit(1);
+}
 
 const app = express();
 app.disable('x-powered-by');
+if (TRUST_PROXY_HOPS) app.set('trust proxy', TRUST_PROXY_HOPS); // req.protocol / req.ip from the proxy's headers
+
+// Health check for Railway: no auth, no data.
+app.get('/healthz', (req, res) => res.type('text').send('ok'));
+
+// Hosted: require Cloudflare Access (if configured) before anything else.
+app.use(cfAccessMiddleware);
 app.use(express.json({ limit: '1mb' }));
 
-// Passkeys are bound to a hostname; keep everyone on "localhost".
+// Passkeys are bound to one hostname: localhost on the Mac, PUBLIC_URL when hosted.
 app.use((req, res, next) => {
-  if (req.hostname === '127.0.0.1') return res.redirect(`http://localhost:${PORT}${req.originalUrl}`);
+  if (!HOSTED && req.hostname === '127.0.0.1') return res.redirect(`http://localhost:${PORT}${req.originalUrl}`);
+  if (PUBLIC_HOST && req.hostname !== PUBLIC_HOST) {
+    if (req.method === 'GET' || req.method === 'HEAD') return res.redirect(308, PUBLIC_URL + req.originalUrl);
+    return res.status(403).json({ error: 'Use ' + PUBLIC_URL });
+  }
   next();
 });
 
 // Reject cross-site state-changing requests.
+const expectedOrigin = (req) => PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
 app.use((req, res, next) => {
   if (req.method === 'GET' || req.method === 'HEAD') return next();
   const origin = req.get('origin');
-  if (origin && origin !== `${req.protocol}://${req.get('host')}`) return res.status(403).json({ error: 'Bad origin' });
+  if (origin && origin !== expectedOrigin(req)) return res.status(403).json({ error: 'Bad origin' });
   next();
 });
 
@@ -42,17 +60,19 @@ app.use((req, res, next) => {
     'X-Frame-Options': 'DENY',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
-    'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; frame-src 'self' blob:; connect-src 'self'",
+    'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; frame-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    ...(HOSTED ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' } : {}),
   });
   next();
 });
 
 app.use(session({
-  name: 'tdash.sid',
-  secret: crypto.randomBytes(32).toString('hex'),
+  name: HOSTED ? '__Host-tdash.sid' : 'tdash.sid',
+  secret: SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: 'strict', maxAge: 12 * 3_600_000 },
+  proxy: HOSTED,
+  cookie: { httpOnly: true, sameSite: 'strict', secure: HOSTED, path: '/', maxAge: (HOSTED ? 8 : 12) * 3_600_000 },
 }));
 
 app.use('/api/auth', authRouter);
@@ -202,7 +222,7 @@ function buildId() {
     return head.slice(0, 7) || 'dev';
   } catch { return 'dev'; }
 }
-const BUILD = buildId();
+const BUILD = (process.env.RAILWAY_GIT_COMMIT_SHA || '').slice(0, 7) || buildId();
 api.get('/version', (req, res) => res.json({ build: BUILD }));
 api.get('/snapshot', async (req, res) => res.json(snapshot.updatedAt ? snapshot : await collect()));
 api.post('/refresh', async (req, res) => { resetStripeCache(); resetCostsCache(); res.json(await collect()); });
@@ -330,6 +350,8 @@ app.use(express.static(path.join(__dirname, '../public'), { extensions: ['html']
 app.get(/^\/(?!api\/).*/, (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 
 app.listen(PORT, HOST, () => {
-  console.log(`\n  Tutorise Dashboard running → http://localhost:${PORT}  (build ${BUILD})\n  Data directory: ${DATA_DIR}\n`);
+  const where = HOSTED ? PUBLIC_URL : `http://localhost:${PORT}`;
+  console.log(`\n  Tutorise Dashboard running → ${where}  (build ${BUILD}${HOSTED ? ', hosted' : ''}${cfAccessEnabled ? ', Cloudflare Access required' : ''})\n  Data directory: ${DATA_DIR}\n`);
+  if (HOSTED && !cfAccessEnabled) console.warn('  Note: Cloudflare Access is not configured. The dashboard is protected only by its own sign-in (see DEPLOY.md).\n');
   restartLoop();
 });
