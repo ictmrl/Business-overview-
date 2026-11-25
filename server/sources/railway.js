@@ -2,19 +2,73 @@
 // (best-effort) CPU / memory metrics for the configured project.
 const ENDPOINT = 'https://backboard.railway.com/graphql/v2';
 
-async function gql(cfg, query, variables = {}) {
+// Railway has two kinds of token, sent differently: account/workspace tokens as
+// "Authorization: Bearer", project tokens in a "Project-Access-Token" header.
+async function rawGql(token, type, query, variables = {}) {
   const headers = { 'Content-Type': 'application/json' };
-  if (cfg.tokenType === 'project') headers['Project-Access-Token'] = cfg.token;
-  else headers.Authorization = `Bearer ${cfg.token}`;
+  if (type === 'project') headers['Project-Access-Token'] = token;
+  else headers.Authorization = `Bearer ${token}`;
   const res = await fetch(ENDPOINT, { method: 'POST', headers, body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(15_000) });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok || json.errors?.length) throw new Error('Railway: ' + (json.errors?.[0]?.message || `${res.status} ${res.statusText}`));
+  if (!res.ok || json.errors?.length) {
+    const e = new Error('Railway: ' + (json.errors?.[0]?.message || `${res.status} ${res.statusText}`));
+    e.notAuthorized = res.status === 401 || res.status === 403 || /not authori[sz]ed|unauthori[sz]ed|forbidden/i.test(json.errors?.[0]?.message || '');
+    throw e;
+  }
   return json.data;
 }
 
-export const railwayConfigured = (cfg) => !!(cfg.token && cfg.projectId);
+/**
+ * Work out how to use the token, whatever the "Token type" setting says: try the
+ * configured type first, then the other. A project token also tells us its
+ * project and environment, so those fields can be left blank.
+ * Returns { type, projectId, environmentId }.
+ */
+const authCache = new Map();
+async function resolveAuth(cfg) {
+  const key = `${cfg.token}|${cfg.projectId}|${cfg.environmentId}`;
+  const hit = authCache.get(key);
+  if (hit && Date.now() - hit.at < 60 * 60_000) return hit.auth;
+  const asProject = async () => {
+    const d = await rawGql(cfg.token, 'project', 'query { projectToken { projectId environmentId } }');
+    return { type: 'project', projectId: d.projectToken.projectId, environmentId: d.projectToken.environmentId };
+  };
+  const asAccount = async () => {
+    if (!cfg.projectId) { const e = new Error('Enter the project ID (Railway → your project → Settings → General).'); e.needsProject = true; throw e; }
+    await rawGql(cfg.token, 'account', 'query($id: String!) { project(id: $id) { id } }', { id: cfg.projectId });
+    return { type: 'account', projectId: cfg.projectId, environmentId: cfg.environmentId };
+  };
+  const order = cfg.tokenType === 'project' ? [asProject, asAccount] : [asAccount, asProject];
+  const errors = [];
+  for (const attempt of order) {
+    try {
+      const auth = await attempt();
+      if (auth.type === 'project' && cfg.projectId && cfg.projectId !== auth.projectId) {
+        throw new Error(`This project token belongs to a different project (${auth.projectId}) from the Project ID entered (${cfg.projectId}). Clear the Project ID or use a token from the right project.`);
+      }
+      authCache.set(key, { at: Date.now(), auth });
+      return auth;
+    } catch (e) {
+      if (e.needsProject) { errors.push(e); continue; }
+      if (!e.notAuthorized) throw e; // network or other error: report it as is
+      errors.push(e);
+    }
+  }
+  const needsProject = errors.find((e) => e.needsProject);
+  if (needsProject) throw new Error('Railway didn’t accept this as a project token. If it’s an account or workspace token, ' + needsProject.message.charAt(0).toLowerCase() + needsProject.message.slice(1));
+  throw new Error('Railway: not authorised. It rejected this token both as an account/workspace token and as a project token. Check that: the token was copied in full and hasn’t been deleted; the Project ID is the project’s ID (Project → Settings → General), not a service or environment ID; and an account token was created in the workspace that owns the project (or with “No workspace” for personal projects).');
+}
 
-export async function fetchRailway(cfg) {
+async function gql(cfg, query, variables = {}) {
+  const auth = await resolveAuth(cfg);
+  return rawGql(cfg.token, auth.type, query, variables);
+}
+
+export const railwayConfigured = (cfg) => !!cfg.token;
+
+export async function fetchRailway(cfgIn) {
+  const auth = await resolveAuth(cfgIn);
+  const cfg = { ...cfgIn, projectId: auth.projectId, environmentId: cfgIn.environmentId || auth.environmentId || '' };
   const data = await gql(cfg, `query($id: String!) {
     project(id: $id) {
       name
@@ -62,8 +116,10 @@ export async function fetchRailway(cfg) {
 }
 
 export async function testRailway(cfg) {
+  const auth = await resolveAuth(cfg);
   const r = await fetchRailway(cfg);
-  return `Connected to “${r.project}” (${r.environment}) — ${r.services.length} services`;
+  const kind = auth.type === 'project' ? 'project token' : 'account/workspace token';
+  return `Connected with ${kind === 'project token' ? 'a' : 'an'} ${kind} to “${r.project}” (${r.environment}): ${r.services.length} service${r.services.length === 1 ? '' : 's'}`;
 }
 
 /**
@@ -71,7 +127,9 @@ export async function testRailway(cfg) {
  * service's variables for DATABASE_PUBLIC_URL (reachable from outside Railway).
  * Returns { url, service } — the URL stays on the server.
  */
-export async function findDatabaseUrl(cfg) {
+export async function findDatabaseUrl(cfgIn) {
+  const auth = await resolveAuth(cfgIn);
+  const cfg = { ...cfgIn, projectId: auth.projectId, environmentId: cfgIn.environmentId || auth.environmentId || '' };
   const data = await gql(cfg, `query($id: String!) {
     project(id: $id) { environments { edges { node { id name } } } services { edges { node { id name } } } }
   }`, { id: cfg.projectId });

@@ -143,13 +143,22 @@ async function registerPasskey(label) {
   await api('/api/auth/passkey/register/verify', { body: { response, label } });
 }
 
+// Browser-side passkey errors in plain words (a cancelled prompt stays quiet).
+function passkeyError(err, cancelledMsg) {
+  if (err?.name === 'NotAllowedError') return cancelledMsg;
+  if (err?.name === 'SecurityError') return 'The browser won’t create a passkey for this address. Open the dashboard at its https:// address, not an IP address or a different domain.';
+  if (err?.name === 'InvalidStateError') return 'This device already has a passkey for this dashboard.';
+  return err?.message || 'Passkey failed';
+}
+
 async function offerPasskey() {
   try {
     await registerPasskey(navigator.platform?.includes('Mac') ? 'Mac (Touch ID)' : 'This device');
     toast('Passkey added — you can sign in with Touch ID next time');
     state.auth = await api('/api/auth/status');
   } catch (err) {
-    if (err.name !== 'NotAllowedError') toast(err.message);
+    const msg = passkeyError(err, '');
+    if (msg) toast(msg);
   }
 }
 
@@ -793,12 +802,12 @@ const SECTIONS = {
     ],
   },
   railway: {
-    title: 'Railway', desc: 'Service health, deploy status and CPU / memory from Railway’s API. Create a token in Railway → Account Settings → Tokens (or a project token in Project → Settings → Tokens).', test: true,
+    title: 'Railway', desc: 'Service health, deploy status and CPU / memory from Railway’s API. Easiest: a project token (Railway → your project → Settings → Tokens), which needs nothing else. An account or workspace token (Account Settings → Tokens) also works, with the Project ID. The dashboard works out which kind you’ve pasted.', test: true,
     fields: [
       { k: 'token', label: 'API token', secret: true, full: true },
-      { k: 'tokenType', label: 'Token type', type: 'select', options: [['account', 'Account / team token'], ['project', 'Project token']] },
-      { k: 'projectId', label: 'Project ID', hint: 'Project → Settings → General, or from the project URL.' },
-      { k: 'environmentId', label: 'Environment ID (optional)', hint: 'Defaults to “production”.', full: true },
+      { k: 'tokenType', label: 'Token type (tried first)', type: 'select', options: [['project', 'Project token'], ['account', 'Account / workspace token']] },
+      { k: 'projectId', label: 'Project ID (account tokens only)', hint: 'Project → Settings → General. Leave blank with a project token.' },
+      { k: 'environmentId', label: 'Environment ID (optional)', hint: 'Defaults to the token’s environment, or “production”.', full: true },
     ],
   },
   stats: {
@@ -979,7 +988,7 @@ function renderSettings(el) {
     };
     $('#pk-add', body).onclick = async () => {
       try { await registerPasskey($('#pk-label', body).value || 'Passkey'); toast('Passkey added'); drawSecurity(body); }
-      catch (err) { if (err.name !== 'NotAllowedError') toast(err.message); }
+      catch (err) { toast(passkeyError(err, 'Passkey not added: the prompt was cancelled or timed out. Try again and approve it with Touch ID.')); }
     };
     $$('[data-del]', body).forEach((b) => (b.onclick = async () => {
       if (!confirm('Remove this passkey? You can still sign in with your password.')) return;

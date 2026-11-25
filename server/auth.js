@@ -25,9 +25,16 @@ function checkPassword(password, stored) {
 }
 
 // Relying party: pinned to PUBLIC_URL when hosted, otherwise whatever host served the page (localhost).
-const rp = (req) => (PUBLIC_URL
-  ? { rpID: new URL(PUBLIC_URL).hostname, origin: PUBLIC_URL }
-  : { rpID: req.hostname, origin: `${req.protocol}://${req.get('host')}` });
+// Normalised through URL so a default port in the Host header (":443") or a
+// difference in letter case doesn't make the browser's origin look different.
+const rp = (req) => {
+  const u = new URL(PUBLIC_URL || `${req.protocol}://${req.get('host')}`);
+  return { rpID: u.hostname, origin: u.origin };
+};
+const logPasskeyFailure = (what, req, e) => {
+  const { rpID, origin } = rp(req);
+  console.warn(`Passkey ${what} failed: ${e.message} | expected origin ${origin}, rpID ${rpID} | browser origin ${req.get('origin') || '-'}`);
+};
 // Hosted passkey sign-ins must prove the person (Touch ID / device PIN), not just the device.
 const REQUIRE_UV = HOSTED;
 
@@ -184,7 +191,8 @@ authRouter.post('/passkey/register/verify', requireAuth, async (req, res) => {
     save();
     res.json({ ok: true });
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    logPasskeyFailure('registration', req, e);
+    res.status(400).json({ error: `Passkey not added: ${e.message}` });
   } finally {
     delete req.session.regChallenge;
   }
@@ -231,6 +239,7 @@ authRouter.post('/passkey/login/verify', async (req, res) => {
     });
   } catch (e) {
     delete req.session.authChallenge;
+    logPasskeyFailure('sign-in', req, e);
     res.status(401).json({ error: e.message });
   }
 });

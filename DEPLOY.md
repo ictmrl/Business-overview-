@@ -113,6 +113,14 @@ get round it.
 
 ## 8. Reconnect your data
 
+**Railway:** the simplest is a **project token** (your project → Settings →
+Tokens): paste it and leave Project ID blank. An account or workspace token
+also works with the Project ID. The dashboard works out which kind you've
+pasted; *Test connection* says which it used.
+
+<!-- -->
+
+
 The hosted copy starts empty: your Mac's settings stay on your Mac. In
 **Settings**, re-enter Railway, Business data (`https://tutorise.uk`,
 `/api/admin/stats`, token), Stripe, AI costs, email and uptime URLs, and use
