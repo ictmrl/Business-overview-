@@ -9,13 +9,13 @@ The same code runs on your Mac and on Railway. On Railway it switches to
   variable, never a file next to the data
 - requires a one-time **setup token** to create the owner account, so nobody
   who finds the address first can claim it
-- answers on **one address only** (`DASH_PUBLIC_URL`); passkeys are tied to it
+- answers on **one address only** when `DASH_PUBLIC_URL` (or Railway's domain variable) is known; passkeys are tied to the address you use
 - requires Touch ID / device PIN for passkey sign-in, offers **passkeys only**,
   and locks password sign-in after repeated failures (5 per IP per 15 minutes;
   20 from anywhere in an hour locks it for an hour)
 - can require **Cloudflare Access** on every request (recommended, below)
-- refuses to start, with a clear message in the deploy logs, if the key, volume
-  or address is missing
+- refuses to start, with a clear message in the deploy logs, if the key or
+  volume is missing, or `DASH_PUBLIC_URL` is malformed
 
 ## 1. Create the service
 
@@ -41,7 +41,7 @@ Service → **Variables**:
 |---|---|
 | `DASH_MASTER_KEY` | Output of `openssl rand -hex 32`. Encrypts your saved tokens and passwords. **Keep a copy somewhere safe** (e.g. your password manager): without it the saved settings can't be read. |
 | `DASH_SETUP_TOKEN` | Output of `openssl rand -hex 16`. Only needed for creating the account; delete it afterwards. |
-| `DASH_PUBLIC_URL` | The address you'll open, exactly as it appears in the browser's address bar, starting `https://`, e.g. `https://tutorise-hq.up.railway.app` or `https://hq.tutorise.uk`. **Optional if you only use the Railway domain:** leave it unset and the generated domain is used automatically. |
+| `DASH_PUBLIC_URL` | The address you'll open, exactly as it appears in the browser's address bar, starting `https://`, e.g. `https://tutorise-hq.up.railway.app` or `https://hq.tutorise.uk`. **Optional:** leave it unset and the dashboard uses whatever address you open it on. Set it when you add a custom domain, so other addresses redirect there. |
 | `SESSION_SECRET` *(optional)* | Output of `openssl rand -hex 32`. Keeps you signed in across redeploys; without it each deploy signs you out. |
 
 Leave `PORT` alone; Railway sets it.

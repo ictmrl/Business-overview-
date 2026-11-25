@@ -56,8 +56,8 @@ export function hostedConfigProblems() {
   const p = [];
   if (!/^[0-9a-f]{64}$/i.test(MASTER_KEY_HEX)) p.push('DASH_MASTER_KEY must be set to 64 hex characters (generate with: openssl rand -hex 32).');
   if (!env.TUTORISE_DASH_DATA && !env.RAILWAY_VOLUME_MOUNT_PATH) p.push('Attach a Railway volume (e.g. mounted at /data) so settings survive redeploys, or set TUTORISE_DASH_DATA to a persistent path.');
+  // DASH_PUBLIC_URL is optional: without it the address comes from each request.
   if (publicUrlProblem) p.push(publicUrlProblem);
-  else if (!PUBLIC_URL) p.push('Set DASH_PUBLIC_URL to the address you open the dashboard on (e.g. https://hq.example.com), or generate a Railway domain.');
   if ((CF_ACCESS_TEAM_DOMAIN && !CF_ACCESS_AUD) || (!CF_ACCESS_TEAM_DOMAIN && CF_ACCESS_AUD)) p.push('Set both CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD, or neither.');
   return p;
 }

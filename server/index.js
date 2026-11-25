@@ -359,9 +359,10 @@ app.use(express.static(path.join(__dirname, '../public'), { extensions: ['html']
 app.get(/^\/(?!api\/).*/, (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 
 app.listen(PORT, HOST, () => {
-  const where = HOSTED ? PUBLIC_URL : `http://localhost:${PORT}`;
+  const where = HOSTED ? (PUBLIC_URL || 'your Railway address') : `http://localhost:${PORT}`;
   if (HOSTED && PUBLIC_URL_RAW && PUBLIC_URL_RAW.replace(/\/+$/, '').toLowerCase() !== PUBLIC_URL.toLowerCase()) console.log(`  Public address “${PUBLIC_URL_RAW}” is used as ${PUBLIC_URL}.`);
   console.log(`\n  Tutorise Dashboard running → ${where}  (build ${BUILD}${HOSTED ? ', hosted' : ''}${cfAccessEnabled ? ', Cloudflare Access required' : ''})\n  Data directory: ${DATA_DIR}\n`);
+  if (HOSTED && !PUBLIC_URL) console.log('  No DASH_PUBLIC_URL or Railway domain variable: the dashboard uses the address each request arrives on.\n');
   if (HOSTED && !cfAccessEnabled) console.warn('  Note: Cloudflare Access is not configured. The dashboard is protected only by its own sign-in (see DEPLOY.md).\n');
   restartLoop();
 });
