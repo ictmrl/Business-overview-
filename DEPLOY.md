@@ -41,7 +41,7 @@ Service → **Variables**:
 |---|---|
 | `DASH_MASTER_KEY` | Output of `openssl rand -hex 32`. Encrypts your saved tokens and passwords. **Keep a copy somewhere safe** (e.g. your password manager): without it the saved settings can't be read. |
 | `DASH_SETUP_TOKEN` | Output of `openssl rand -hex 16`. Only needed for creating the account; delete it afterwards. |
-| `DASH_PUBLIC_URL` | The address you'll open, e.g. `https://hq.tutorise.uk`. Optional if you only use the Railway domain, which is picked up automatically. |
+| `DASH_PUBLIC_URL` | The address you'll open, exactly as it appears in the browser's address bar, starting `https://`, e.g. `https://tutorise-hq.up.railway.app` or `https://hq.tutorise.uk`. **Optional if you only use the Railway domain:** leave it unset and the generated domain is used automatically. |
 | `SESSION_SECRET` *(optional)* | Output of `openssl rand -hex 32`. Keeps you signed in across redeploys; without it each deploy signs you out. |
 
 Leave `PORT` alone; Railway sets it.
@@ -65,6 +65,14 @@ Either:
 3. Add a passkey when prompted (Touch ID). Passkeys made on `localhost` don't
    carry over: each address needs its own.
 4. Remove `DASH_SETUP_TOKEN` from the variables.
+
+### If sign-in says “Bad origin”
+
+The page you're on isn't the address the dashboard accepts. The message names
+both, e.g. *“this page is open at https://a…, but the dashboard only accepts
+https://b…”*. Open the accepted address, or change `DASH_PUBLIC_URL` to the
+address you want (or delete it to use the Railway domain) and redeploy. The
+deploy log also records the refused address.
 
 ## 6. Lock down sign-in
 

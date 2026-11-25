@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import { authRouter, requireAuth } from './auth.js';
-import { HOSTED, PORT, HOST, PUBLIC_URL, PUBLIC_HOST, TRUST_PROXY_HOPS, SESSION_SECRET, hostedConfigProblems } from './config.js';
+import { HOSTED, PORT, HOST, PUBLIC_URL, PUBLIC_HOST, PUBLIC_URL_RAW, TRUST_PROXY_HOPS, SESSION_SECRET, hostedConfigProblems } from './config.js';
 import { cfAccessMiddleware, cfAccessEnabled } from './cfaccess.js';
 import { getSettings, getPublicSettings, updateSection, DATA_DIR, SECRET_FIELDS, getState, save } from './store.js';
 import { demoStats, demoInfra, demoMail, demoCosts } from './sources/demo.js';
@@ -47,12 +47,21 @@ app.use((req, res, next) => {
 });
 
 // Reject cross-site state-changing requests.
-const expectedOrigin = (req) => PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+const normOrigin = (u) => { try { return new URL(u).origin; } catch { return String(u); } };
+const expectedOrigin = (req) => PUBLIC_URL || normOrigin(`${req.protocol}://${req.get('host')}`);
+const warnedOrigins = new Set();
 app.use((req, res, next) => {
   if (req.method === 'GET' || req.method === 'HEAD') return next();
   const origin = req.get('origin');
-  if (origin && origin !== expectedOrigin(req)) return res.status(403).json({ error: 'Bad origin' });
-  next();
+  if (!origin) return next();
+  const got = normOrigin(origin), want = expectedOrigin(req);
+  if (got === want) return next();
+  if (!warnedOrigins.has(got) && warnedOrigins.size < 50) {
+    warnedOrigins.add(got);
+    console.warn(`Refused a request from ${got}: the dashboard only accepts ${want}${HOSTED ? ' (DASH_PUBLIC_URL / Railway domain)' : ''}.`);
+  }
+  const fix = HOSTED ? ` Open ${want} instead, or set DASH_PUBLIC_URL to ${got} in Railway and redeploy.` : ` Open ${want} instead.`;
+  res.status(403).json({ error: `Bad origin: this page is open at ${got}, but the dashboard only accepts ${want}.${fix}` });
 });
 
 app.use((req, res, next) => {
@@ -351,6 +360,7 @@ app.get(/^\/(?!api\/).*/, (req, res) => res.sendFile(path.join(__dirname, '../pu
 
 app.listen(PORT, HOST, () => {
   const where = HOSTED ? PUBLIC_URL : `http://localhost:${PORT}`;
+  if (HOSTED && PUBLIC_URL_RAW && PUBLIC_URL_RAW.replace(/\/+$/, '').toLowerCase() !== PUBLIC_URL.toLowerCase()) console.log(`  Public address “${PUBLIC_URL_RAW}” is used as ${PUBLIC_URL}.`);
   console.log(`\n  Tutorise Dashboard running → ${where}  (build ${BUILD}${HOSTED ? ', hosted' : ''}${cfAccessEnabled ? ', Cloudflare Access required' : ''})\n  Data directory: ${DATA_DIR}\n`);
   if (HOSTED && !cfAccessEnabled) console.warn('  Note: Cloudflare Access is not configured. The dashboard is protected only by its own sign-in (see DEPLOY.md).\n');
   restartLoop();
