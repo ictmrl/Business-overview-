@@ -380,7 +380,7 @@ function renderOverview(el) {
         <div class="mini"><div class="k">Parents <span id="ac-par-n" class="acc-new"></span></div><div class="v" id="ac-par">—</div><div class="split" id="ac-par-split"></div></div>
         <div class="mini"><div class="k">Students <span id="ac-stu-n" class="acc-new"></span></div><div class="v" id="ac-stu">—</div><div class="split" id="ac-stu-split"></div></div>
         <div class="mini"><div class="k">Students per parent</div><div class="v" id="ac-ratio">—</div><div class="muted acc-sub">average family size</div></div>
-        <div class="mini"><div class="k">Subscriptions per parent</div><div class="v" id="ac-subs">—</div><div class="muted acc-sub" id="ac-subs-n"></div></div>
+        <div class="mini" title="Average number of subjects each child studies, counting children whose parent is on a paid or trial plan (not free)"><div class="k">Subjects per child</div><div class="v" id="ac-subj">—</div><div class="muted acc-sub" id="ac-subj-n">paid + trial plans</div></div>
       </div>
     </div>
     <div class="grid g-main">
@@ -460,7 +460,7 @@ function renderOverview(el) {
   }
 
   function drawAccounts(snap) {
-    const ac = snap.accounts || {}, subs = snap.subscribers?.total;
+    const ac = snap.accounts || {};
     countUp($('#ac-par', el), ac.parents);
     countUp($('#ac-stu', el), ac.students);
     $('#ac-par-n', el).textContent = ac.parentsNewToday ? `+${int(ac.parentsNewToday)} today` : '';
@@ -470,11 +470,12 @@ function renderOverview(el) {
     const missing = ac.parents == null && ac.students == null;
     $('#ac-hint', el).hidden = !missing || snap.sources?.stats?.state === 'demo';
     const ratio = ac.parents && ac.students != null ? ac.students / ac.parents : null;
-    const perParent = ac.parents && subs != null ? subs / ac.parents : null;
     countUp($('#ac-ratio', el), ratio, (n) => n.toFixed(2));
-    countUp($('#ac-subs', el), perParent, (n) => n.toFixed(2));
-    // If subscriptions per parent tracks students per parent, subscriptions are counted per child.
-    $('#ac-subs-n', el).textContent = ratio && perParent ? (Math.abs(perParent - ratio) / ratio < 0.15 ? 'looks like one per child' : perParent <= 1.15 ? 'looks like one per family' : '') : '';
+    // Subjects per child: children of parents on paid or trial plans (not free), worked out by Tutorise.
+    countUp($('#ac-subj', el), ac.subjectsPerChild, (n) => n.toFixed(1));
+    const split = [ac.subjectsPerChildPaid != null && `paid ${ac.subjectsPerChildPaid.toFixed(1)}`, ac.subjectsPerChildTrial != null && `trial ${ac.subjectsPerChildTrial.toFixed(1)}`].filter(Boolean);
+    $('#ac-subj-n', el).textContent = ac.subjectsPerChild == null ? 'not sent by Tutorise yet'
+      : split.length ? split.join(' · ') : `paid + trial plans${ac.subjectsChildren != null ? ` · ${int(ac.subjectsChildren)} children` : ''}`;
   }
 
   function drawCosts(snap) {

@@ -35,6 +35,10 @@ for the last 30 days, with dates as "YYYY-MM-DD".
     "parentsInactive": 0,    // parents whose plan has ended (cancelled/expired/inactive)
     "studentsFree": 0,
     "studentsInactive": 0,
+    "subjectsPerChild": 0,   // average subjects per child, children of parents on paid or trial plans (not free)
+    "subjectsPerChildPaid": 0,  // optional split
+    "subjectsPerChildTrial": 0,
+    "subjectsChildren": 0,  // optional: how many children the average covers
     "parentsNewToday": 0,
     "studentsNewToday": 0
   },

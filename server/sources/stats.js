@@ -31,6 +31,8 @@ export function normalizeStats(raw = {}) {
     parentsPaid: opt(acc.parentsPaid), parentsTrialing: opt(acc.parentsTrialing),
     parentsFree: opt(acc.parentsFree), parentsInactive: opt(acc.parentsInactive),
     studentsFree: opt(acc.studentsFree), studentsInactive: opt(acc.studentsInactive),
+    subjectsPerChild: opt(acc.subjectsPerChild ?? acc.avgSubjectsPerChild), subjectsChildren: opt(acc.subjectsChildren),
+    subjectsPerChildPaid: opt(acc.subjectsPerChildPaid), subjectsPerChildTrial: opt(acc.subjectsPerChildTrial),
     studentsPaid: opt(acc.studentsPaid), studentsTrialing: opt(acc.studentsTrialing),
   };
   if (Object.keys(a).length) out.active = { live: opt(a.live), liveStudents: opt(a.liveStudents), liveParents: opt(a.liveParents), todayStudents: opt(a.todayStudents ?? a.studentsToday), todayParents: opt(a.todayParents ?? a.parentsToday), today: opt(a.today ?? a.daily), week: opt(a.week ?? a.weekly), month: opt(a.month ?? a.monthly), history: hist(a.history) };

@@ -24,6 +24,10 @@ arrays are daily, oldest first, ideally the last 30 days.
     "parentsInactive": 25,  // parents whose plan has ended (cancelled/expired/inactive)
     "studentsFree": 9,
     "studentsInactive": 6,
+    "subjectsPerChild": 2.4,   // average subjects per child, children of parents on paid or trial plans (not free)
+    "subjectsPerChildPaid": 2.6,  // optional split
+    "subjectsPerChildTrial": 1.7,
+    "subjectsChildren": 1501,  // optional: how many children the average covers
     "parentsNewToday": 4,
     "studentsNewToday": 6
   },
