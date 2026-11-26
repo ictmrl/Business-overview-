@@ -689,12 +689,12 @@ function drawTasksBadge(t) {
   b.hidden = !n;
   b.textContent = n;
   b.className = `badge ${t?.red ? 'badge-red' : 'badge-amber'}`;
-  b.title = t?.red ? `${t.red} overdue` : t?.amber ? `${t.amber} due within a week` : '';
+  b.title = t?.red ? `${t.red} overdue` : t?.amber ? `${t.amber} due soon` : '';
 }
 
 const ST = {
-  green: { cls: 'good', label: 'On track', hint: 'due in more than a week' },
-  amber: { cls: 'warning', label: 'Due within a week', hint: 'due in the next 7 days' },
+  green: { cls: 'good', label: 'On track', hint: 'not due soon' },
+  amber: { cls: 'warning', label: 'Due soon', hint: 'within 7 days (1 day for weekly, 3 for fortnightly)' },
   red: { cls: 'critical', label: 'Overdue', hint: 'past their due date' },
 };
 const fmtDay = (d, opts = { day: 'numeric', month: 'short' }) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { ...opts, timeZone: 'UTC' });
@@ -839,7 +839,7 @@ function renderTasks(el) {
     const start = addDays(first, -lead);
     const end = addDays(start, 41);
     const byDay = {};
-    for (const t of data.tasks) for (const d of occurrences(t, start, end)) (byDay[d] ||= []).push({ t, st: d === t.dueDate ? statusOf(t, today) : statusOf({ dueDate: d }, today), next: d !== t.dueDate });
+    for (const t of data.tasks) for (const d of occurrences(t, start, end)) (byDay[d] ||= []).push({ t, st: d === t.dueDate ? statusOf(t, today) : statusOf({ dueDate: d, repeat: t.repeat }, today), next: d !== t.dueDate });
     let cells = '';
     for (let i = 0; i < 42; i++) {
       const d = addDays(start, i), items = (byDay[d] || []).sort((a, b) => a.t.title.localeCompare(b.t.title));

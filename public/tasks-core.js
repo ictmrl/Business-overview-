@@ -2,17 +2,19 @@
 // due dates and colours. Dates are plain "YYYY-MM-DD" strings (calendar days,
 // no time zone), compared as strings.
 
+// amber: how many days before the due date a task turns amber (red once it has passed).
 export const REPEATS = {
-  none: { label: 'One-off' },
-  weekly: { label: 'Weekly', days: 7 },
-  fortnightly: { label: 'Fortnightly', days: 14 },
-  monthly: { label: 'Monthly', months: 1 },
-  quarterly: { label: 'Quarterly', months: 3 },
-  '6months': { label: 'Every 6 months', months: 6 },
-  annually: { label: 'Annually', months: 12 },
+  none: { label: 'One-off', amber: 7 },
+  weekly: { label: 'Weekly', days: 7, amber: 1 },
+  fortnightly: { label: 'Fortnightly', days: 14, amber: 3 },
+  monthly: { label: 'Monthly', months: 1, amber: 7 },
+  quarterly: { label: 'Quarterly', months: 3, amber: 7 },
+  '6months': { label: 'Every 6 months', months: 6, amber: 7 },
+  annually: { label: 'Annually', months: 12, amber: 7 },
 };
 
-export const AMBER_DAYS = 7; // amber from a week before the due date (inclusive), red once it has passed
+export const AMBER_DAYS = 7; // default warning window, and the range shown as "Due in N days"
+export const amberDays = (task) => REPEATS[task.repeat]?.amber ?? AMBER_DAYS;
 
 const pad = (n) => String(n).padStart(2, '0');
 export const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)))
@@ -50,7 +52,7 @@ export function statusOf(task, today) {
   if (task.done) return 'done';
   const d = daysBetween(today, task.dueDate);
   if (d < 0) return 'red';
-  if (d <= AMBER_DAYS) return 'amber';
+  if (d <= amberDays(task)) return 'amber';
   return 'green';
 }
 

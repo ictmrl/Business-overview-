@@ -6,7 +6,7 @@ A real-time, single-screen overview of Tutorise.uk that runs locally on your Mac
 - **Live updates**: the server pulls every source on an interval and pushes changes to the browser over Server-Sent Events. Your inbox updates instantly using IMAP IDLE.
 - **AI challenges**: flags raised against AI tutor responses, by type (Response unsure, Content drift, Reported errors, Reversals, Rule breaks, Unsupported claims, Board claims, Verifier findings, Educator) — a tile per type with 30-day count, today and trend, daily totals, and a filterable list of what was flagged.
 - **Infrastructure**: Railway services with deploy status, CPU and memory, plus HTTP uptime monitors (24h strip, response-time trend, 90-day uptime).
-- **Tasks**: one-off or repeating tasks (weekly to annually) with a month calendar, sorted by next due date. Green when more than a week away, amber within 7 days, red when overdue, with counts at the top and a sidebar badge. Ticking off a repeating task moves it to its next date (undo available).
+- **Tasks**: one-off or repeating tasks (weekly to annually) with a month calendar, sorted by next due date. Red when overdue; amber 7 days before for monthly-or-longer and one-off tasks, 3 days for fortnightly and 1 day for weekly; green otherwise, with counts at the top and a sidebar badge. Ticking off a repeating task moves it to its next date (undo available).
 - **Inbox**: read your IMAP mail, search, mark as unread and reply. Replies are sent over SMTP, threaded correctly and copied to Sent.
 - **Settings tab**: Railway, business data (API endpoint or direct Postgres), Stripe (optional), email, uptime URLs, passkeys and password.
 - **Passkey login**: sign in with Touch ID or iCloud Keychain. A password is kept as a fallback.
