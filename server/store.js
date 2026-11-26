@@ -51,7 +51,7 @@ export const SECRET_FIELDS = {
 };
 
 export const DEFAULT_SETTINGS = {
-  general: { businessName: 'Tutorise', refreshSeconds: 30, currency: 'GBP', demoMode: true },
+  general: { businessName: 'Tutorise', refreshSeconds: 30, currency: 'GBP', demoMode: true, timezone: 'Europe/London' },
   railway: { token: '', tokenType: 'account', projectId: '', environmentId: '' },
   stats: {
     mode: 'api', // 'api' | 'postgres'
@@ -104,7 +104,7 @@ export const DEFAULT_SETTINGS = {
   },
 };
 
-const DEFAULT_STATE = { settings: DEFAULT_SETTINGS, user: null, passkeys: [], uptime: {}, daily: {} };
+const DEFAULT_STATE = { settings: DEFAULT_SETTINGS, user: null, passkeys: [], uptime: {}, daily: {}, tasks: [] };
 
 function deepMerge(base, over) {
   if (Array.isArray(base) || typeof base !== 'object' || base === null) return over === undefined ? base : over;

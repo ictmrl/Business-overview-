@@ -479,3 +479,57 @@ details.queries summary { cursor: pointer; color: var(--text-2); margin: 6px 0 1
 .cost-note .pos, .cost-note .neg { white-space: nowrap; }
 .cost-note .pos { color: var(--good-text); font-weight: 600; }
 .cost-note .neg { color: var(--bad-text); font-weight: 600; }
+
+/* ---------- Tasks ---------- */
+.toast-action { margin-left: 10px; border: 0; background: none; color: var(--accent); font-weight: 650; cursor: pointer; padding: 0; }
+.badge.badge-red { background: var(--critical); }
+.badge.badge-amber { background: var(--warning); color: #0b0b0b; }
+.task-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.task-count { font: inherit; color: inherit; text-align: left; cursor: pointer; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; column-gap: 12px; align-items: center; padding: 16px 18px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); transition: transform .15s, border-color .15s, box-shadow .15s; }
+.task-count:hover { transform: translateY(-2px); }
+.task-count .tc-dot { width: 12px; height: 12px; border-radius: 50%; grid-row: 1 / 4; align-self: start; margin-top: 14px; }
+.task-count .tc-num { font-size: 40px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; }
+.task-count .tc-label { font-weight: 600; font-size: 13.5px; }
+.task-count .tc-hint { font-size: 12px; color: var(--muted); }
+.task-count.st-green { background: color-mix(in srgb, var(--good) 10%, var(--surface-2)); } .task-count.st-green .tc-dot { background: var(--good); } .task-count.st-green .tc-num { color: var(--good-text); }
+.task-count.st-amber { background: color-mix(in srgb, var(--warning) 12%, var(--surface-2)); } .task-count.st-amber .tc-dot { background: var(--warning); } .task-count.st-amber .tc-num { color: color-mix(in srgb, var(--warning) 70%, var(--text)); }
+.task-count.st-red { background: color-mix(in srgb, var(--critical) 12%, var(--surface-2)); } .task-count.st-red .tc-dot { background: var(--critical); } .task-count.st-red .tc-num { color: var(--bad-text); }
+.task-count.active { border-color: var(--text-2); box-shadow: 0 0 0 1px var(--text-2); }
+.tasks-layout { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; }
+.task-row { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 12px; border-radius: 12px; border-left: 4px solid var(--border); margin-bottom: 6px; background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.task-row.st-green { border-left-color: var(--good); } .task-row.st-amber { border-left-color: var(--warning); } .task-row.st-red { border-left-color: var(--critical); background: color-mix(in srgb, var(--critical) 7%, var(--surface-2)); }
+.task-row.st-done { border-left-color: var(--border); opacity: .7; }
+.task-row .grow { cursor: pointer; min-width: 0; }
+.task-row .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-row .desc { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-check { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border-strong); background: transparent; color: transparent; display: grid; place-items: center; cursor: pointer; transition: all .15s; padding: 0; }
+.task-check svg { width: 15px; height: 15px; }
+.task-check:hover { border-color: var(--good); color: var(--good-text); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.task-check.done { border-color: var(--good); background: var(--good); color: #fff; cursor: default; }
+.task-done-head { margin: 16px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-wd { font-size: 11px; color: var(--muted); text-align: center; padding: 2px 0 4px; }
+.cal-day { min-height: 76px; border-radius: 9px; padding: 4px; background: var(--surface-2); border: 1px solid transparent; display: flex; flex-direction: column; gap: 2px; cursor: pointer; min-width: 0; }
+.cal-day:hover { border-color: var(--border-strong); }
+.cal-day.out { opacity: .45; }
+.cal-day.today { border-color: var(--accent); }
+.cal-day.today .cal-num { background: var(--accent); color: #fff; border-radius: 999px; padding: 0 6px; }
+.cal-num { font-size: 11.5px; font-weight: 600; align-self: flex-start; color: var(--text-2); }
+.cal-chip { font: inherit; font-size: 10.5px; line-height: 1.3; text-align: left; border: 0; border-radius: 5px; padding: 1px 5px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); border-left: 3px solid; background: var(--surface); }
+.cal-chip.st-green { border-left-color: var(--good); } .cal-chip.st-amber { border-left-color: var(--warning); } .cal-chip.st-red { border-left-color: var(--critical); }
+.cal-chip.later { opacity: .7; font-style: italic; }
+.cal-more { font-size: 10.5px; color: var(--muted); padding-left: 4px; }
+.task-dialog { border: 1px solid var(--border-strong); border-radius: 18px; background: var(--surface); color: var(--text); padding: 22px; width: min(520px, calc(100vw - 32px)); box-shadow: 0 30px 80px -20px rgba(0,0,0,.6); }
+.task-dialog::backdrop { background: rgba(0,0,0,.45); backdrop-filter: blur(3px); }
+.task-dialog h3 { margin: 0 0 16px; }
+@media (max-width: 1100px) { .tasks-layout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) { .task-counts { grid-template-columns: minmax(0, 1fr); } .cal-day { min-height: 52px; } .cal-chip { font-size: 0; height: 6px; padding: 0; border-left-width: 0; } .cal-chip.st-green { background: var(--good); } .cal-chip.st-amber { background: var(--warning); } .cal-chip.st-red { background: var(--critical); } }
+.task-row .grow { flex: 1; }
+.task-row .status { flex: none; width: 168px; justify-content: flex-start; }
+.task-row.st-done .btn { flex: none; }
+@media (max-width: 700px) { .task-row .status { width: auto; } }
+/* Amber text needs a darker step on light backgrounds to stay readable */
+:root { --warning-text: var(--warning); }
+:root[data-theme="light"] { --warning-text: #8a5a00; }
+.status.warning { color: var(--warning-text); }
+.task-count.st-amber .tc-num { color: var(--warning-text); }

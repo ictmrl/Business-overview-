@@ -1,4 +1,5 @@
 import { areaChart, barChart, hBars, donut, ring, sparkline, uptimeStrip, countUp, compact, esc, hideTip } from './charts.js';
+import { REPEATS, statusOf, dueLabel, occurrences, summarise, addDays } from './tasks-core.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -17,12 +18,18 @@ async function api(path, opts = {}) {
   if (!res.ok) throw new Error(json.error || `Request failed (${res.status})`);
   return json;
 }
-function toast(msg) {
+function toast(msg, action) {
   const t = $('#toast');
   t.textContent = msg;
+  if (action) {
+    const b = document.createElement('button');
+    b.className = 'toast-action'; b.textContent = action.label;
+    b.onclick = () => { t.classList.remove('show'); action.run(); };
+    t.append(' ', b);
+  }
   t.classList.add('show');
   clearTimeout(t.__t);
-  t.__t = setTimeout(() => t.classList.remove('show'), 2800);
+  t.__t = setTimeout(() => t.classList.remove('show'), action ? 6000 : 2800);
 }
 const money = (v, cur = 'GBP', dp = 0) => v == null ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: cur, maximumFractionDigits: dp, minimumFractionDigits: dp }).format(v);
 const int = (v) => (v == null ? '—' : Math.round(v).toLocaleString('en-GB'));
@@ -61,6 +68,8 @@ const I = {
   key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11a4 4 0 1 0-4 4"/><path d="M8 3a8 8 0 0 1 8 8v2"/><path d="M4 7a8 8 0 0 0-1 4c0 2 .5 3.5 1.3 5"/><path d="M12 11v3c0 3 1 5 2 7"/><path d="M16 17c0 1.5.3 3 1 4"/><path d="M20 11c0 2-.2 4 .5 6"/></svg>',
   reply: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14-5-5 5-5"/><path d="M4 9h11a5 5 0 0 1 5 5v6"/></svg>',
   send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>',
+  tasks: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="m9 15 2 2 4-4"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>',
   logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>',
 };
 
@@ -165,6 +174,7 @@ async function offerPasskey() {
 // ------------------------------------------------------------------ shell
 const VIEWS = {
   overview: { title: 'Overview', icon: 'overview', render: renderOverview },
+  tasks: { title: 'Tasks', icon: 'tasks', render: renderTasks },
   inbox: { title: 'Inbox', icon: 'mail', render: renderInbox },
   ai: { title: 'AI Challenges', icon: 'ai', render: renderAI },
   infra: { title: 'Infrastructure', icon: 'infra', render: renderInfra },
@@ -177,7 +187,7 @@ function renderShell() {
   root.innerHTML = `<div class="app">
     <aside class="sidebar">
       <div class="brand"><div class="logo sm">T</div><div><b id="biz">Tutorise</b><span>Business HQ</span></div></div>
-      <nav class="nav">${Object.entries(VIEWS).map(([k, v]) => `<button data-view="${k}">${I[v.icon]}<span>${v.title}</span>${k === 'inbox' ? '<span class="badge" id="unread-badge" hidden></span>' : ''}</button>`).join('')}</nav>
+      <nav class="nav">${Object.entries(VIEWS).map(([k, v]) => `<button data-view="${k}">${I[v.icon]}<span>${v.title}</span>${k === 'inbox' ? '<span class="badge" id="unread-badge" hidden></span>' : ''}${k === 'tasks' ? '<span class="badge" id="tasks-badge" hidden></span>' : ''}</button>`).join('')}</nav>
       <div class="sidebar-foot">
         <div class="user-chip"><div class="avatar">${esc(u.name[0] || '?')}</div><div class="grow"><div>${esc(u.name)}</div><div class="muted" style="font-size:11.5px">${esc(u.email || 'Owner')}</div></div></div>
         <button class="btn ghost sm" id="logout">${I.logout} Sign out</button>
@@ -225,6 +235,7 @@ function connectStream() {
   es.addEventListener('snapshot', (e) => setSnap(JSON.parse(e.data)));
   es.addEventListener('uptime', (e) => { if (state.snap) { state.snap.uptime = JSON.parse(e.data); state.view?.update?.(state.snap, 'uptime'); } });
   es.addEventListener('mail', () => { state.view?.onMail?.(); toast('New email arrived'); });
+  es.addEventListener('tasks', (e) => { const t = JSON.parse(e.data); if (state.snap) state.snap.tasks = t; drawTasksBadge(t); state.view?.onTasks?.(); });
   es.onopen = () => $('#live')?.classList.remove('off');
   es.onerror = async () => {
     $('#live')?.classList.add('off');
@@ -238,6 +249,7 @@ function setSnap(snap) {
   if (!snap?.updatedAt) return;
   state.snap = snap;
   $('#biz') && ($('#biz').textContent = snap.businessName || 'Tutorise');
+  drawTasksBadge(snap.tasks);
   const ub = $('#unread-badge');
   if (ub) { const n = snap.inbox?.unread || 0; ub.hidden = !n; ub.textContent = n; }
   updateAgo();
@@ -666,6 +678,184 @@ function renderAI(el) {
     drawn = true;
   }
   return { update };
+}
+
+// ------------------------------------------------------------------ Tasks
+/** Sidebar badge: overdue (red) or, if none, due within a week (amber). */
+function drawTasksBadge(t) {
+  const b = $('#tasks-badge');
+  if (!b) return;
+  const n = t?.red || t?.amber || 0;
+  b.hidden = !n;
+  b.textContent = n;
+  b.className = `badge ${t?.red ? 'badge-red' : 'badge-amber'}`;
+  b.title = t?.red ? `${t.red} overdue` : t?.amber ? `${t.amber} due within a week` : '';
+}
+
+const ST = {
+  green: { cls: 'good', label: 'On track', hint: 'due in more than a week' },
+  amber: { cls: 'warning', label: 'Due within a week', hint: 'due in the next 7 days' },
+  red: { cls: 'critical', label: 'Overdue', hint: 'past their due date' },
+};
+const fmtDay = (d, opts = { day: 'numeric', month: 'short' }) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { ...opts, timeZone: 'UTC' });
+
+function renderTasks(el) {
+  let data = { tasks: [], today: null }, filter = '', showDone = false;
+  const now = new Date();
+  let month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM shown in the calendar
+  el.innerHTML = `<div class="view">
+    <div class="card task-hero">
+      <div class="card-head"><h3>Tasks</h3><span class="sub" id="t-sub"></span><div class="right"><button class="btn primary" id="t-add">+ Add task</button></div></div>
+      <div class="task-counts">${['green', 'amber', 'red'].map((k) => `<button class="task-count st-${k}" data-f="${k}" aria-pressed="false"><span class="tc-dot"></span><span class="tc-num" id="tc-${k}">0</span><span class="tc-label">${ST[k].label}</span><span class="tc-hint">${ST[k].hint}</span></button>`).join('')}</div>
+    </div>
+    <div class="grid tasks-layout">
+      <div class="card">
+        <div class="card-head"><h3 id="t-list-title">Upcoming</h3><span class="sub" id="t-list-sub">next due first</span>
+          <div class="right"><label class="check" style="margin:0;font-size:12.5px"><input type="checkbox" id="t-done"> Show completed</label></div></div>
+        <div class="list" id="t-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><button class="icon-btn" id="cal-prev" aria-label="Previous month">‹</button><h3 id="cal-title" style="min-width:140px;text-align:center"></h3><button class="icon-btn" id="cal-next" aria-label="Next month">›</button>
+          <div class="right"><button class="btn sm ghost" id="cal-today">Today</button></div></div>
+        <div class="cal" id="cal"></div>
+        <p class="muted" style="font-size:12px;margin:10px 0 0">Click a day to add a task. Repeating tasks are shown on their future dates.</p>
+      </div>
+    </div>
+    <dialog class="task-dialog" id="t-dlg">
+      <form method="dialog" id="t-form">
+        <h3 id="t-dlg-title">Add task</h3>
+        <div class="field"><label for="tf-title">Task</label><input type="text" id="tf-title" maxlength="200" required placeholder="e.g. Renew ICO registration"></div>
+        <div class="form-grid">
+          <div class="field"><label for="tf-due">Due date</label><input type="date" id="tf-due" required></div>
+          <div class="field"><label for="tf-repeat">Repeats</label><select id="tf-repeat">${Object.entries(REPEATS).map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join('')}</select></div>
+        </div>
+        <div class="field"><label for="tf-notes">Notes (optional)</label><textarea class="prose" id="tf-notes" rows="3" maxlength="2000"></textarea></div>
+        <div class="hint muted" id="tf-last" style="margin:-4px 0 12px;font-size:12px"></div>
+        <div class="form-actions"><button class="btn primary" value="save" id="tf-save">Save</button><button class="btn" value="cancel" formnovalidate>Cancel</button><span style="flex:1"></span><button class="btn danger" value="delete" id="tf-delete" formnovalidate>Delete</button></div>
+        <div class="error-msg" id="tf-err"></div>
+      </form>
+    </dialog>
+  </div>`;
+
+  const dlg = $('#t-dlg', el);
+  let editing = null;
+  function openEditor(task, presetDate) {
+    editing = task || null;
+    $('#t-dlg-title', el).textContent = task ? 'Edit task' : 'Add task';
+    $('#tf-title', el).value = task?.title || '';
+    $('#tf-due', el).value = task?.dueDate || presetDate || data.today || '';
+    $('#tf-repeat', el).value = task?.repeat || 'none';
+    $('#tf-notes', el).value = task?.notes || '';
+    $('#tf-delete', el).hidden = !task;
+    $('#tf-err', el).textContent = '';
+    $('#tf-last', el).textContent = task?.lastDone ? `Last done ${fmtDay(task.lastDone, { day: 'numeric', month: 'short', year: 'numeric' })}` : '';
+    dlg.showModal();
+    $('#tf-title', el).focus();
+  }
+  $('#t-form', el).addEventListener('submit', async (e) => {
+    const action = e.submitter?.value;
+    if (action === 'cancel') return;
+    e.preventDefault();
+    try {
+      if (action === 'delete') {
+        if (!confirm(`Delete “${editing.title}”?`)) return;
+        await api(`/api/tasks/${editing.id}`, { method: 'DELETE' });
+        toast('Task deleted');
+      } else {
+        const body = { title: $('#tf-title', el).value, dueDate: $('#tf-due', el).value, repeat: $('#tf-repeat', el).value, notes: $('#tf-notes', el).value };
+        if (editing) await api(`/api/tasks/${editing.id}`, { method: 'PUT', body }); else await api('/api/tasks', { body });
+        toast(editing ? 'Task updated' : 'Task added');
+      }
+      dlg.close();
+      await load();
+    } catch (err) { $('#tf-err', el).textContent = err.message; }
+  });
+
+  async function markDone(t) {
+    try {
+      const r = await api(`/api/tasks/${t.id}/done`, { body: {} });
+      toast(r.next ? `Done. Next due ${fmtDay(r.next, { day: 'numeric', month: 'short', year: 'numeric' })}` : 'Done', {
+        label: 'Undo', run: async () => { await api(`/api/tasks/${t.id}/undo`, { body: {} }).catch((e) => toast(e.message)); load(); },
+      });
+      await load();
+    } catch (err) { toast(err.message); }
+  }
+
+  $('#t-add', el).onclick = () => openEditor(null);
+  $$('.task-count', el).forEach((b) => (b.onclick = () => { filter = filter === b.dataset.f ? '' : b.dataset.f; draw(); }));
+  $('#t-done', el).onchange = (e) => { showDone = e.target.checked; draw(); };
+  const shift = (n) => { const [y, m] = month.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); month = d.toISOString().slice(0, 7); drawCalendar(); };
+  $('#cal-prev', el).onclick = () => shift(-1);
+  $('#cal-next', el).onclick = () => shift(1);
+  $('#cal-today', el).onclick = () => { month = (data.today || new Date().toISOString()).slice(0, 7); drawCalendar(); };
+
+  async function load() {
+    try { data = await api('/api/tasks'); draw(); }
+    catch (err) { $('#t-list', el).innerHTML = `<div class="empty"><div class="error-msg">${esc(err.message)}</div></div>`; }
+  }
+
+  function draw() {
+    const today = data.today;
+    const open = data.tasks.filter((t) => !t.done).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.title.localeCompare(b.title));
+    const counts = summarise(open, today);
+    for (const k of ['green', 'amber', 'red']) countUp($(`#tc-${k}`, el), counts[k]);
+    $$('.task-count', el).forEach((b) => { const on = b.dataset.f === filter; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
+    $('#t-sub', el).textContent = open.length ? `${open.length} open · today is ${fmtDay(today, { weekday: 'long', day: 'numeric', month: 'long' })}` : '';
+    const shown = filter ? open.filter((t) => statusOf(t, today) === filter) : open;
+    $('#t-list-title', el).textContent = filter ? ST[filter].label : 'Upcoming';
+    $('#t-list-sub', el).innerHTML = filter ? `<a href="#" id="t-clear">show all</a>` : 'next due first';
+    $('#t-clear', el)?.addEventListener('click', (e) => { e.preventDefault(); filter = ''; draw(); });
+    const row = (t) => {
+      const st = statusOf(t, today);
+      const meta = [t.repeat !== 'none' ? REPEATS[t.repeat]?.label : null, t.lastDone ? `last done ${fmtDay(t.lastDone)}` : null, t.notes ? t.notes.replace(/\s+/g, ' ').slice(0, 90) : null].filter(Boolean).join(' · ');
+      return `<div class="task-row st-${st}" data-id="${esc(t.id)}">
+        <button class="task-check" data-done="${esc(t.id)}" title="Mark done${t.repeat !== 'none' ? ' (moves to the next date)' : ''}" aria-label="Mark “${esc(t.title)}” done">${I.check}</button>
+        <div class="grow" data-edit="${esc(t.id)}" role="button" tabindex="0"><div class="title">${esc(t.title)}</div><div class="desc">${esc(meta || fmtDay(t.dueDate, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</div></div>
+        <span class="status ${ST[st].cls}" title="${esc(fmtDay(t.dueDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}">${esc(dueLabel(t, today))}</span>
+      </div>`;
+    };
+    let html = shown.length ? shown.map(row).join('')
+      : `<div class="empty">${I.tasks}<div>${open.length ? 'No tasks in this group' : 'No tasks yet. Add one with “+ Add task”, or click a day in the calendar.'}</div></div>`;
+    if (showDone) {
+      const done = data.tasks.filter((t) => t.done).sort((a, b) => (b.doneOn || '').localeCompare(a.doneOn || ''));
+      html += `<div class="task-done-head">Completed</div>` + (done.length ? done.map((t) => `<div class="task-row st-done" data-id="${esc(t.id)}">
+        <span class="task-check done">${I.check}</span>
+        <div class="grow" data-edit="${esc(t.id)}" role="button" tabindex="0"><div class="title">${esc(t.title)}</div><div class="desc">Completed ${t.doneOn ? fmtDay(t.doneOn, { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</div></div>
+        <button class="btn sm ghost" data-reopen="${esc(t.id)}">Reopen</button></div>`).join('') : '<p class="muted" style="font-size:12.5px">Nothing completed yet.</p>');
+    }
+    $('#t-list', el).innerHTML = html;
+    $$('[data-done]', el).forEach((b) => (b.onclick = () => markDone(data.tasks.find((t) => t.id === b.dataset.done))));
+    $$('[data-edit]', el).forEach((b) => { const go = () => openEditor(data.tasks.find((t) => t.id === b.dataset.edit)); b.onclick = go; b.onkeydown = (e) => { if (e.key === 'Enter') go(); }; });
+    $$('[data-reopen]', el).forEach((b) => (b.onclick = async () => { await api(`/api/tasks/${b.dataset.reopen}/undo`, { body: {} }).catch((e) => toast(e.message)); load(); }));
+    drawCalendar();
+  }
+
+  function drawCalendar() {
+    const today = data.today || new Date().toISOString().slice(0, 10);
+    const [y, m] = month.split('-').map(Number);
+    $('#cal-title', el).textContent = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const first = `${month}-01`;
+    const lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7; // Monday first
+    const start = addDays(first, -lead);
+    const end = addDays(start, 41);
+    const byDay = {};
+    for (const t of data.tasks) for (const d of occurrences(t, start, end)) (byDay[d] ||= []).push({ t, st: d === t.dueDate ? statusOf(t, today) : statusOf({ dueDate: d }, today), next: d !== t.dueDate });
+    let cells = '';
+    for (let i = 0; i < 42; i++) {
+      const d = addDays(start, i), items = (byDay[d] || []).sort((a, b) => a.t.title.localeCompare(b.t.title));
+      const chips = items.slice(0, 3).map(({ t, st, next }) => `<button class="cal-chip st-${st}${next ? ' later' : ''}" data-edit="${esc(t.id)}" title="${esc(t.title)}${next ? ' (repeat)' : ''}">${esc(t.title)}</button>`).join('');
+      const more = items.length > 3 ? `<span class="cal-more">+${items.length - 3} more</span>` : '';
+      cells += `<div class="cal-day${d.slice(0, 7) !== month ? ' out' : ''}${d === today ? ' today' : ''}" data-day="${d}" role="button" tabindex="0" aria-label="${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))}${items.length ? `, ${items.length} task${items.length === 1 ? '' : 's'}` : ''}">
+        <span class="cal-num">${Number(d.slice(8))}</span>${chips}${more}</div>`;
+    }
+    $('#cal', el).innerHTML = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((w) => `<div class="cal-wd">${w}</div>`).join('') + cells;
+    $$('.cal-chip', el).forEach((c) => (c.onclick = (e) => { e.stopPropagation(); openEditor(data.tasks.find((t) => t.id === c.dataset.edit)); }));
+    $$('.cal-day', el).forEach((c) => { const go = () => openEditor(null, c.dataset.day); c.onclick = go; c.onkeydown = (e) => { if (e.key === 'Enter') go(); }; });
+  }
+
+  load();
+  const rollover = setInterval(load, 10 * 60_000); // pick up a new day
+  return { onTasks: load, destroy: () => clearInterval(rollover) };
 }
 
 // ------------------------------------------------------------------ Infra view

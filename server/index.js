@@ -17,6 +17,7 @@ import { fetchStripe, resetStripeCache } from './sources/stripe.js';
 import { fetchCosts, costsConfigured, resetCostsCache, costsFromStats } from './sources/costs.js';
 import { startUptime, uptimeSnapshot, checkAll, parseUrls } from './sources/uptime.js';
 import * as mail from './sources/email.js';
+import { tasksRouter, tasksSummary } from './tasks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const problems = hostedConfigProblems();
@@ -167,6 +168,7 @@ async function collect() {
   } else if (demo) { const l = demoMail.list(); out.inbox = { unread: l.filter((m) => !m.seen).length, latest: l.slice(0, 5) }; out.sources.email = sourceStatus('demo'); }
   else out.sources.email = sourceStatus('off');
 
+  out.tasks = tasksSummary();
   recordDaily(out);
   snapshot = out;
   broadcast('snapshot', snapshot);
@@ -351,6 +353,7 @@ api.post('/email/:uid/reply', async (req, res) => {
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 
+api.use('/tasks', tasksRouter((summary) => { snapshot.tasks = summary; broadcast('tasks', summary); }));
 app.use('/api', api);
 
 // Static frontend
