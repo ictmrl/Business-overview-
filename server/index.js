@@ -17,7 +17,8 @@ import { fetchStripe, resetStripeCache } from './sources/stripe.js';
 import { fetchCosts, costsConfigured, resetCostsCache, costsFromStats } from './sources/costs.js';
 import { startUptime, uptimeSnapshot, checkAll, parseUrls } from './sources/uptime.js';
 import * as mail from './sources/email.js';
-import { tasksRouter, tasksSummary } from './tasks.js';
+import { tasksRouter, tasksSummary, overdueTasks } from './tasks.js';
+import { pushRouter, checkForNotifications, badgeParts } from './push.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const problems = hostedConfigProblems();
@@ -170,8 +171,10 @@ async function collect() {
 
   out.tasks = tasksSummary();
   recordDaily(out);
+  out.badge = badgeParts(out);
   snapshot = out;
   broadcast('snapshot', snapshot);
+  checkForNotifications(out, overdueTasks()).catch((e) => console.warn('Push notifications:', e.message));
   return snapshot;
 }
 
@@ -353,12 +356,20 @@ api.post('/email/:uid/reply', async (req, res) => {
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 
-api.use('/tasks', tasksRouter((summary) => { snapshot.tasks = summary; broadcast('tasks', summary); }));
+api.use('/tasks', tasksRouter((summary) => {
+  snapshot.tasks = summary;
+  snapshot.badge = badgeParts(snapshot);
+  broadcast('tasks', summary);
+  broadcast('badge', snapshot.badge);
+  checkForNotifications(snapshot, overdueTasks()).catch(() => {});
+}));
+api.use('/push', pushRouter(() => snapshot));
 app.use('/api', api);
 
 // Static frontend
+app.get('/sw.js', (req, res) => { res.set({ 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' }); res.sendFile(path.join(__dirname, '../public/sw.js')); });
 app.use('/vendor/webauthn.js', express.static(path.join(__dirname, '../node_modules/@simplewebauthn/browser/dist/bundle/index.umd.min.js')));
-app.use(express.static(path.join(__dirname, '../public'), { extensions: ['html'], setHeaders: (res) => res.set('Cache-Control', 'no-cache') }));
+app.use(express.static(path.join(__dirname, '../public'), { extensions: ['html'], setHeaders: (res, file) => { res.set('Cache-Control', 'no-cache'); if (file.endsWith('.webmanifest')) res.type('application/manifest+json'); } }));
 app.get(/^\/(?!api\/).*/, (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 
 app.listen(PORT, HOST, () => {

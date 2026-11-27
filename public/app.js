@@ -31,6 +31,25 @@ function toast(msg, action) {
   clearTimeout(t.__t);
   t.__t = setTimeout(() => t.classList.remove('show'), action ? 6000 : 2800);
 }
+// ---- Home Screen app, push notifications and badge
+const isInstalledApp = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+let swReg = null;
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register('/sw.js', { scope: '/' }).then((r) => { swReg = r; }).catch(() => {});
+}
+async function setBadge(n) {
+  try {
+    if (navigator.setAppBadge) { if (n > 0) await navigator.setAppBadge(n); else await navigator.clearAppBadge(); }
+    else navigator.serviceWorker?.controller?.postMessage({ type: 'badge', count: n });
+  } catch { /* badges not supported here */ }
+}
+/** The app was opened or brought to the front: new subscribers count as seen. */
+async function markAppSeen() {
+  try { const r = await api('/api/push/seen', { body: {} }); setBadge(r.badge?.total || 0); } catch {}
+}
+
 const money = (v, cur = 'GBP', dp = 0) => v == null ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: cur, maximumFractionDigits: dp, minimumFractionDigits: dp }).format(v);
 const int = (v) => (v == null ? '—' : Math.round(v).toLocaleString('en-GB'));
 const pct = (v, dp = 1) => (v == null ? '—' : `${v.toFixed(dp)}%`);
@@ -77,6 +96,8 @@ const I = {
 let state = { snap: null, auth: null, view: null, es: null };
 
 let booting = null;
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state.auth?.authed) markAppSeen(); });
+
 async function boot() {
   // Coalesce overlapping calls (e.g. auto passkey prompt + button click both signing in).
   if (booting) return booting;
@@ -110,7 +131,7 @@ function renderAuth() {
     $('#setup').onsubmit = async (e) => {
       e.preventDefault();
       try {
-        await api('/api/auth/setup', { body: { name: $('#n').value, email: $('#e').value, password: $('#p').value, setupToken: $('#st')?.value } });
+        await api('/api/auth/setup', { body: { name: $('#n').value, email: $('#e').value, password: $('#p').value, setupToken: $('#st')?.value, remember: isInstalledApp() } });
         await boot();
         if (supportsPasskey) setTimeout(() => offerPasskey(), 600);
       } catch (err) { $('#err').textContent = err.message; }
@@ -128,7 +149,7 @@ function renderAuth() {
   </div></div>`;
   if ($('#pw')) $('#pw').onsubmit = async (e) => {
     e.preventDefault();
-    try { await api('/api/auth/login', { body: { password: $('#p').value } }); boot(); }
+    try { await api('/api/auth/login', { body: { password: $('#p').value, remember: isInstalledApp() } }); boot(); }
     catch (err) { $('#err').textContent = err.message; }
   };
   $('#pk')?.addEventListener('click', passkeyLogin);
@@ -139,7 +160,7 @@ async function passkeyLogin() {
   try {
     const optionsJSON = await api('/api/auth/passkey/login/options', { method: 'POST', body: {} });
     const response = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON });
-    await api('/api/auth/passkey/login/verify', { body: { response } });
+    await api('/api/auth/passkey/login/verify', { body: { response, remember: isInstalledApp() } });
     boot();
   } catch (err) {
     if (err.name !== 'NotAllowedError' && $('#err')) $('#err').textContent = err.message;
@@ -223,6 +244,7 @@ function renderShell() {
   const tickClock = () => { const c = $('#clock'); if (c) c.textContent = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); };
   tickClock(); clearInterval(state.clockT); state.clockT = setInterval(() => { tickClock(); updateAgo(); }, 1000);
   api('/api/version').then((v) => { const b = $('#build'); if (b) b.textContent = `Build ${v.build}`; }).catch(() => {});
+  markAppSeen();
   connectStream();
   window.onhashchange = () => route();
   route(true);
@@ -235,6 +257,7 @@ function connectStream() {
   es.addEventListener('snapshot', (e) => setSnap(JSON.parse(e.data)));
   es.addEventListener('uptime', (e) => { if (state.snap) { state.snap.uptime = JSON.parse(e.data); state.view?.update?.(state.snap, 'uptime'); } });
   es.addEventListener('mail', () => { state.view?.onMail?.(); toast('New email arrived'); });
+  es.addEventListener('badge', (e) => setBadge(JSON.parse(e.data).total || 0));
   es.addEventListener('tasks', (e) => { const t = JSON.parse(e.data); if (state.snap) state.snap.tasks = t; drawTasksBadge(t); state.view?.onTasks?.(); });
   es.onopen = () => $('#live')?.classList.remove('off');
   es.onerror = async () => {
@@ -250,6 +273,7 @@ function setSnap(snap) {
   state.snap = snap;
   $('#biz') && ($('#biz').textContent = snap.businessName || 'Tutorise');
   drawTasksBadge(snap.tasks);
+  if (snap.badge) setBadge(snap.badge.total);
   const ub = $('#unread-badge');
   if (ub) { const n = snap.inbox?.unread || 0; ub.hidden = !n; ub.textContent = n; }
   updateAgo();
@@ -1051,6 +1075,7 @@ const SECTIONS = {
       { k: 'intervalSeconds', label: 'Check every (seconds)', type: 'number' },
     ],
   },
+  notifications: { title: 'Notifications', custom: true },
   security: { title: 'Security & login', custom: true },
 };
 
@@ -1076,7 +1101,7 @@ function renderSettings(el) {
     statusDot();
     const def = SECTIONS[section];
     const body = $('#s-body', el);
-    if (def.custom) return drawSecurity(body);
+    if (def.custom) return section === 'notifications' ? drawNotifications(body) : drawSecurity(body);
     const vals = structuredClone(data.settings[section]);
     const fieldHtml = (f) => {
       if (f.show && !f.show(vals)) return '';
@@ -1156,6 +1181,65 @@ function renderSettings(el) {
       try { const r = await api(`/api/settings/${section}/test`, { body: collect() }); msg.className = 'form-msg ok-msg'; msg.textContent = '✓ ' + r.message; }
       catch (err) { msg.className = 'form-msg error-msg'; msg.textContent = '✕ ' + err.message; }
     });
+  }
+
+  async function drawNotifications(body) {
+    body.innerHTML = '<div class="skeleton" style="height:160px"></div>';
+    let cfg;
+    try { cfg = await api('/api/push'); } catch (e) { body.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`; return; }
+    const reg = swReg || (await navigator.serviceWorker?.getRegistration('/').catch(() => null));
+    const sub = reg && pushSupported() ? await reg.pushManager.getSubscription().catch(() => null) : null;
+    const thisDevice = sub && cfg.devices.some((d) => d.endpoint === sub.endpoint);
+    const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+    let blocker = '';
+    if (!window.isSecureContext) blocker = 'Notifications need the hosted https:// address.';
+    else if (isIOS() && !isInstalledApp()) blocker = 'On iPhone, add the dashboard to your Home Screen first: in Safari tap Share → Add to Home Screen, then open it from the new icon and come back here.';
+    else if (!pushSupported()) blocker = 'This browser doesn’t support push notifications. On iPhone you need iOS 16.4 or later and the dashboard added to the Home Screen.';
+    else if (perm === 'denied') blocker = isIOS() ? 'Notifications are blocked for this app. On iPhone: Settings → Notifications → Tutorise HQ → Allow Notifications.' : 'Notifications are blocked for this site in your browser’s settings. Allow them for this address, then reload.';
+    const b = cfg.badge || {};
+    const labels = { email: 'New emails', subscribers: 'New subscribers and trials', tasks: 'Tasks becoming overdue', uptime: 'A site going down or coming back' };
+    body.innerHTML = `<div class="card-head"><h3 style="font-size:17px">Notifications</h3></div>
+      <p class="section-desc">Push notifications and an app-icon badge on your phone. The badge shows <b>unread emails + new subscribers since you last opened the app + overdue tasks</b>. iPhone needs iOS 16.4+ and the dashboard added to the Home Screen.</p>
+      <div class="notif-status">
+        <div><div class="k">This device</div><div class="v">${thisDevice ? '<span class="status good">Notifications on</span>' : blocker ? '<span class="status neutral">Not available yet</span>' : '<span class="status neutral">Off</span>'}</div></div>
+        <div><div class="k">Badge right now</div><div class="v"><b>${b.total ?? 0}</b> <span class="muted">= ${b.emails ?? 0} email · ${b.subscribers ?? 0} new subscribers · ${b.tasks ?? 0} overdue</span></div></div>
+      </div>
+      ${blocker ? `<div class="banner" style="margin:14px 0">${esc(blocker)}</div>` : ''}
+      <div class="form-actions" style="margin:14px 0 22px">
+        ${!blocker && !thisDevice ? '<button class="btn primary" id="n-enable">Enable on this device</button>' : ''}
+        ${thisDevice ? '<button class="btn" id="n-disable">Turn off on this device</button>' : ''}
+        <button class="btn" id="n-test" ${cfg.devices.length ? '' : 'disabled'}>Send a test notification</button>
+        <span class="form-msg" id="n-msg"></span>
+      </div>
+      <h4 style="margin:0 0 8px">Notify me about</h4>
+      ${Object.entries(labels).map(([k, l]) => `<label class="check"><input type="checkbox" data-pref="${k}" ${cfg.prefs[k] ? 'checked' : ''}> ${l}</label>`).join('')}
+      <h4 style="margin:18px 0 6px">Devices</h4>
+      ${cfg.devices.length ? cfg.devices.map((d) => `<div class="passkey-row"><div style="flex:1"><b>${esc(d.label)}</b>${sub && d.endpoint === sub.endpoint ? ' <span class="muted">(this device)</span>' : ''}<div class="muted" style="font-size:12.5px">Added ${new Date(d.createdAt).toLocaleDateString('en-GB')}${d.lastOk ? ` · last delivered ${new Date(d.lastOk).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}${d.lastError ? ` · <span class="error-msg">${esc(d.lastError)}</span>` : ''}</div></div><button class="btn sm danger" data-rm="${esc(d.endpoint)}">Remove</button></div>`).join('') : '<p class="muted">No devices yet.</p>'}`;
+    const msg = $('#n-msg', body);
+    const b64ToBytes = (b64) => { const s = atob((b64 + '='.repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(s, (c) => c.charCodeAt(0)); };
+    $('#n-enable', body)?.addEventListener('click', async () => {
+      try {
+        const p = await Notification.requestPermission(); // must run straight from the tap
+        if (p !== 'granted') { msg.className = 'form-msg error-msg'; msg.textContent = 'Notifications weren’t allowed.'; return; }
+        const r = swReg || (await navigator.serviceWorker.register('/sw.js', { scope: '/' }));
+        await navigator.serviceWorker.ready;
+        const s2 = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(cfg.publicKey) });
+        const label = /iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) || isIOS() ? 'iPad' : /Android/.test(navigator.userAgent) ? 'Android phone' : /Mac/.test(navigator.userAgent) ? 'Mac' : 'This device';
+        await api('/api/push/subscribe', { body: { subscription: s2.toJSON(), label } });
+        toast('Notifications turned on'); drawNotifications(body);
+      } catch (e) { msg.className = 'form-msg error-msg'; msg.textContent = `Couldn’t turn on notifications for this device: ${e.message}`; }
+    });
+    $('#n-disable', body)?.addEventListener('click', async () => {
+      try { await api('/api/push/unsubscribe', { body: { endpoint: sub.endpoint } }); await sub.unsubscribe(); setBadge(0); toast('Notifications turned off on this device'); drawNotifications(body); }
+      catch (e) { toast(e.message); }
+    });
+    $('#n-test', body).onclick = async () => {
+      msg.className = 'form-msg muted'; msg.textContent = 'Sending…';
+      try { const r = await api('/api/push/test', { body: {} }); msg.className = 'form-msg ok-msg'; msg.textContent = `✓ Sent to ${r.sent} device${r.sent === 1 ? '' : 's'}`; }
+      catch (e) { msg.className = 'form-msg error-msg'; msg.textContent = '✕ ' + e.message; }
+    };
+    $$('[data-pref]', body).forEach((c) => (c.onchange = async () => { await api('/api/push/prefs', { method: 'PUT', body: { [c.dataset.pref]: c.checked } }).catch((e) => toast(e.message)); }));
+    $$('[data-rm]', body).forEach((x) => (x.onclick = async () => { await api('/api/push/unsubscribe', { body: { endpoint: x.dataset.rm } }); drawNotifications(body); }));
   }
 
   async function drawSecurity(body) {

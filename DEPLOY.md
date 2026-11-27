@@ -135,6 +135,14 @@ Notes:
   (`http://tutora.railway.internal:8080`) instead of the public address. This
   works only if tutora listens on all interfaces, IPv6 included.
 
+## 9. iPhone app and notifications (optional)
+
+Open the dashboard's https:// address in Safari on your iPhone → **Share → Add
+to Home Screen** → open it from the icon and sign in (passkey) → **Settings →
+Notifications → Enable on this device** → allow notifications → **Send a test
+notification**. The dashboard creates its push keys itself and keeps them
+encrypted on the volume; nothing to add in Railway.
+
 ## Running on your Mac
 
 Unchanged: `npm start` and `http://localhost:4747`. None of the variables

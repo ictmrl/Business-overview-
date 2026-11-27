@@ -41,6 +41,17 @@ extra protections switched on automatically (setup token, single address,
 passkeys only, sign-in lockouts, optional Cloudflare Access). Step-by-step:
 **[DEPLOY.md](DEPLOY.md)**.
 
+## iPhone app, notifications and badge
+
+With the hosted dashboard (needs its https:// address), open it in Safari on
+your iPhone, tap **Share → Add to Home Screen**, open it from the new icon and
+sign in once (app sign-ins last 30 days). Then **Settings → Notifications →
+Enable on this device**. You'll get notifications for new emails, new
+subscribers/trials, tasks becoming overdue and sites going down or back up
+(each can be turned off), and the app icon shows a badge:
+**unread emails + new subscribers since you last opened the app + overdue tasks**.
+Needs iOS 16.4 or later. iOS shows a notification with every badge change.
+
 ## Connect your data (Settings tab)
 
 | Section | What you need |

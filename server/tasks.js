@@ -4,11 +4,12 @@
 import crypto from 'node:crypto';
 import express from 'express';
 import { getState, save, getSettings } from './store.js';
-import { REPEATS, isDate, nextDueAfterDone, summarise, todayIn } from '../public/tasks-core.js';
+import { REPEATS, isDate, nextDueAfterDone, summarise, todayIn, statusOf } from '../public/tasks-core.js';
 
 export const tasksToday = () => todayIn(getSettings().general.timezone || 'Europe/London');
 const list = () => (getState().tasks ||= []);
 export const tasksSummary = () => summarise(list().filter((t) => !t.done), tasksToday());
+export const overdueTasks = () => { const today = tasksToday(); return list().filter((t) => !t.done && statusOf(t, today) === 'red').map(({ id, title, dueDate }) => ({ id, title, dueDate })); };
 
 function clean(body, existing = {}) {
   const out = {};

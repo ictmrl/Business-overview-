@@ -533,3 +533,18 @@ details.queries summary { cursor: pointer; color: var(--text-2); margin: 6px 0 1
 :root[data-theme="light"] { --warning-text: #8a5a00; }
 .status.warning { color: var(--warning-text); }
 .task-count.st-amber .tc-num { color: var(--warning-text); }
+
+/* Notifications settings */
+.notif-status { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.notif-status > div { padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
+.notif-status .k { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+@media (max-width: 700px) { .notif-status { grid-template-columns: minmax(0, 1fr); } }
+/* Installed iPhone app: keep content clear of the notch and home bar */
+@media (display-mode: standalone) {
+  .topbar { padding-top: calc(14px + env(safe-area-inset-top)); }
+  .view { padding-bottom: calc(48px + env(safe-area-inset-bottom)); }
+}
+@media (display-mode: standalone) and (max-width: 900px) {
+  .sidebar { padding-top: calc(10px + env(safe-area-inset-top)); }
+  .topbar { padding-top: 14px; }
+}

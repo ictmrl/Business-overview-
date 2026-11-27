@@ -68,6 +68,11 @@ function recordFail(ip) {
 }
 const sameToken = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
 
+// Sign-ins from the installed Home Screen app last 30 days (a passkey or password
+// is still needed to sign in); browser sessions keep the normal length.
+const APP_SESSION_MS = 30 * 86_400_000;
+function rememberIfApp(req) { if (req.body?.remember === true) req.session.cookie.maxAge = APP_SESSION_MS; }
+
 export function requireAuth(req, res, next) {
   if (req.session?.authed) return next();
   res.status(401).json({ error: 'Not signed in' });
@@ -107,6 +112,7 @@ authRouter.post('/setup', (req, res) => {
   save();
   req.session.regenerate(() => {
     req.session.authed = true;
+      rememberIfApp(req);
     res.json({ ok: true });
   });
 });
@@ -122,6 +128,7 @@ authRouter.post('/login', (req, res) => {
   attempts.delete(req.ip);
   req.session.regenerate(() => {
     req.session.authed = true;
+      rememberIfApp(req);
     res.json({ ok: true });
   });
 });
@@ -235,6 +242,7 @@ authRouter.post('/passkey/login/verify', async (req, res) => {
     save();
     req.session.regenerate(() => {
       req.session.authed = true;
+      rememberIfApp(req);
       res.json({ ok: true });
     });
   } catch (e) {
