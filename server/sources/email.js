@@ -88,8 +88,11 @@ export async function listMessages(cfg) {
   }
   for (const m of msgs) m.preview = bodyCache.get(m.uid)?.preview || '';
   msgs.sort((a, b) => new Date(b.date) - new Date(a.date));
-  const unread = (await c.status(cfg.mailbox || 'INBOX', { unseen: true }).catch(() => ({}))).unseen ?? msgs.filter((m) => !m.seen).length;
-  return { messages: msgs, unread };
+  // SEARCH on the open mailbox is always current; STATUS on an open mailbox can be cached by some servers.
+  let unread = msgs.filter((m) => !m.seen).length;
+  try { const ids = await c.search({ seen: false }, { uid: true }); if (Array.isArray(ids)) unread = ids.length; } catch { /* keep the count from the fetched messages */ }
+  const maxUid = msgs.reduce((m, x) => Math.max(m, x.uid || 0), 0);
+  return { messages: msgs, unread, maxUid, uidValidity: String(c.mailbox?.uidValidity ?? '') };
 }
 
 const htmlToText = (h) => h.replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, '').replace(/<br\s*\/?>|<\/p>|<\/div>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\n{3,}/g, '\n\n').trim();

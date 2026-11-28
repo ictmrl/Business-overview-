@@ -15,6 +15,7 @@ function pushState() {
   st.push.prefs = { ...DEFAULT_PREFS, ...(st.push.prefs || {}) };
   st.push.seen ||= {};
   st.push.notifiedOverdue ||= [];
+  st.push.log ||= [];
   return st.push;
 }
 
@@ -53,12 +54,24 @@ export function markSeen(snap) {
 let subject = 'https://tutorise.uk';
 export function setPushSubject(origin) { if (/^https:\/\//.test(origin || '')) subject = origin; }
 
+function logAttempt(entry) {
+  const p = pushState();
+  p.log.unshift({ at: new Date().toISOString(), ...entry });
+  p.log = p.log.slice(0, 30);
+  const res = (entry.results || []).map((r) => `${r.label}: ${r.ok ? 'delivered to push service' : `failed ${r.status || ''} ${r.error || ''}`}`).join('; ');
+  console.log(`Push ${entry.type || ''} “${entry.title || ''}” → ${entry.note || res || 'no devices'}`);
+}
+
+/** Record why an expected alert didn't go out (shown in Settings → Notifications). */
+export function logSkip(type, title, note) { logAttempt({ type, title, note, skipped: true }); save(); }
+
 export async function sendToAll(payload) {
   const p = pushState();
-  if (!p.subscriptions.length) return { sent: 0, failed: 0 };
+  if (!p.subscriptions.length) { logAttempt({ type: payload.type, title: payload.title, note: 'No devices have notifications turned on' }); save(); return { sent: 0, failed: 0 }; }
   const { publicKey, privateKey } = vapid();
   const body = JSON.stringify(payload);
   let sent = 0, failed = 0, removed = 0;
+  const results = [];
   await Promise.all(p.subscriptions.map(async (s) => {
     try {
       await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, body, {
@@ -66,16 +79,20 @@ export async function sendToAll(payload) {
         vapidDetails: { subject, publicKey, privateKey },
       });
       s.lastOk = new Date().toISOString(); sent++;
+      results.push({ label: s.label, ok: true });
     } catch (e) {
       failed++;
       // 404/410: the device unsubscribed or the app was removed; forget it.
+      const reason = `${e.body || e.message || ''}`.replace(/\s+/g, ' ').trim().slice(0, 200);
+      results.push({ label: s.label, ok: false, status: e.statusCode, error: reason });
       if (e.statusCode === 404 || e.statusCode === 410) { s.gone = true; removed++; }
-      else s.lastError = `${e.statusCode || ''} ${e.body || e.message}`.trim().slice(0, 200);
+      else s.lastError = `${e.statusCode || ''} ${reason}`.trim();
     }
   }));
   if (removed) p.subscriptions = p.subscriptions.filter((s) => !s.gone);
+  logAttempt({ type: payload.type, title: payload.title, results });
   save();
-  return { sent, failed, removed };
+  return { sent, failed, removed, results };
 }
 
 // ---------------------------------------------------------------- triggers
@@ -97,6 +114,9 @@ export async function checkForNotifications(snap, overdue = []) {
     emailLive: snap.sources?.email?.state === 'live',
     unread: snap.inbox?.unread ?? null,
     latest: snap.inbox?.latest?.[0] || null,
+    latestList: snap.inbox?.latest || [],
+    maxUid: snap.inbox?.maxUid ?? null,
+    uidValidity: snap.inbox?.uidValidity ?? null,
     statsLive: snap.sources?.stats?.state === 'live',
     subs: snap.subscribers?.total ?? null,
     trials: snap.subscribers?.trialing ?? null,
@@ -107,9 +127,9 @@ export async function checkForNotifications(snap, overdue = []) {
   prev = cur;
   const jobs = [];
   const fire = (type, payload) => {
-    if (Date.now() - (lastSent[type] || 0) < THROTTLE_MS && !payload.always) return;
+    if (Date.now() - (lastSent[type] || 0) < THROTTLE_MS && !payload.always) { logSkip(type, payload.title, 'Skipped: another alert of this kind went out less than a minute ago'); return; }
     lastSent[type] = Date.now();
-    jobs.push(sendToAll({ ...payload, badge: badge.total }));
+    jobs.push(sendToAll({ ...payload, type, badge: badge.total }));
   };
 
   // Overdue tasks: notify once per task per due date, also across restarts.
@@ -126,9 +146,14 @@ export async function checkForNotifications(snap, overdue = []) {
   }
 
   if (before) {
-    if (prefs.email && cur.emailLive && before.emailLive && cur.unread != null && before.unread != null && cur.unread > before.unread) {
-      const n = cur.unread - before.unread, m = cur.latest;
-      fire('email', { title: n === 1 && m ? `Email from ${m.from?.name || m.from?.address || 'someone'}` : `${n} new emails`, body: n === 1 && m ? m.subject : `${cur.unread} unread`, url: m ? `/#inbox/${m.uid}` : '/#inbox', tag: 'email' });
+    // New email = a message with a higher UID than before that hasn't been read yet.
+    if (cur.emailLive && before.emailLive && cur.maxUid != null && before.maxUid != null && cur.maxUid > before.maxUid && cur.uidValidity === before.uidValidity) {
+      const fresh = cur.latestList.filter((m) => m.uid > before.maxUid && !m.seen);
+      if (!prefs.email) logSkip('email', 'New email', 'Skipped: email alerts are turned off');
+      else if (fresh.length) {
+        const m = fresh[0];
+        fire('email', { title: fresh.length === 1 ? `Email from ${m.from?.name || m.from?.address || 'someone'}` : `${fresh.length} new emails`, body: fresh.length === 1 ? m.subject : `${cur.unread ?? fresh.length} unread`, url: `/#inbox/${m.uid}`, tag: 'email' });
+      }
     }
     if (prefs.subscribers && cur.statsLive && before.statsLive && cur.subs != null && before.subs != null && cur.subs > before.subs) {
       const n = cur.subs - before.subs, t = (cur.trials ?? 0) - (before.trials ?? 0);
@@ -155,6 +180,17 @@ export function pushRouter(getSnapshot) {
       prefs: p.prefs,
       devices: p.subscriptions.map((s) => ({ endpoint: s.endpoint, label: s.label, createdAt: s.createdAt, lastOk: s.lastOk, lastError: s.lastError })),
       badge: badgeParts(getSnapshot()),
+      log: p.log,
+      diag: (() => {
+        const snap = getSnapshot() || {};
+        return {
+          email: snap.sources?.email || { state: 'off' },
+          emailCheckedAt: snap.inbox?.checkedAt || null,
+          unread: snap.inbox?.unread ?? null,
+          stats: snap.sources?.stats || { state: 'off' },
+          updatedAt: snap.updatedAt || null,
+        };
+      })(),
     });
   });
   r.post('/subscribe', (req, res) => {
@@ -182,8 +218,8 @@ export function pushRouter(getSnapshot) {
   });
   r.post('/test', async (req, res) => {
     const badge = badgeParts(getSnapshot());
-    const r2 = await sendToAll({ title: 'Tutorise HQ', body: `Notifications are working. Badge: ${badge.total} (${badge.emails} email, ${badge.subscribers} new subscribers, ${badge.tasks} overdue tasks).`, url: '/#settings/notifications', tag: 'test', badge: badge.total });
-    if (!r2.sent) return res.status(400).json({ error: r2.failed ? 'Sending failed. See the device list for the error.' : 'No devices are set up for notifications yet.' });
+    const r2 = await sendToAll({ type: 'test', title: 'Tutorise HQ', body: `Notifications are working. Badge: ${badge.total} (${badge.emails} email, ${badge.subscribers} new subscribers, ${badge.tasks} overdue tasks).`, url: '/#settings/notifications', tag: 'test', badge: badge.total });
+    if (!r2.sent) return res.status(400).json({ error: r2.failed ? `Apple/Google refused it: ${r2.results?.find((x) => !x.ok)?.status || ''} ${r2.results?.find((x) => !x.ok)?.error || ''}`.trim() : 'No devices are set up for notifications yet.' });
     res.json({ ok: true, ...r2 });
   });
   // The app was opened: clear "new subscribers" and return the current badge.

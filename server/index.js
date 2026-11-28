@@ -164,7 +164,7 @@ async function collect() {
 
   // Inbox summary
   if (mail.emailConfigured(s.email)) {
-    try { const { messages, unread } = await mail.listMessages(s.email); out.inbox = { unread, latest: messages.slice(0, 5) }; out.sources.email = sourceStatus('live'); }
+    try { const { messages, unread, maxUid, uidValidity } = await mail.listMessages(s.email); out.inbox = { unread, latest: messages.slice(0, 5), maxUid, uidValidity, checkedAt: new Date().toISOString() }; out.sources.email = sourceStatus('live'); }
     catch (e) { out.sources.email = sourceStatus('error', e.message); }
   } else if (demo) { const l = demoMail.list(); out.inbox = { unread: l.filter((m) => !m.seen).length, latest: l.slice(0, 5) }; out.sources.email = sourceStatus('demo'); }
   else out.sources.email = sourceStatus('off');

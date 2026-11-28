@@ -1193,7 +1193,7 @@ function renderSettings(el) {
     const perm = 'Notification' in window ? Notification.permission : 'unsupported';
     let blocker = '';
     if (!window.isSecureContext) blocker = 'Notifications need the hosted https:// address.';
-    else if (isIOS() && !isInstalledApp()) blocker = 'On iPhone, add the dashboard to your Home Screen first: in Safari tap Share → Add to Home Screen, then open it from the new icon and come back here.';
+    else if (isIOS() && !isInstalledApp()) blocker = 'This is open in a Safari tab, where iPhone doesn’t allow notifications. Add it to your Home Screen: in Safari tap Share → Add to Home Screen, and make sure “Open as Web App” is switched on. Then open it from the new icon and come back here. (If you already added it, remove the icon and add it again with that switch on.)';
     else if (!pushSupported()) blocker = 'This browser doesn’t support push notifications. On iPhone you need iOS 16.4 or later and the dashboard added to the Home Screen.';
     else if (perm === 'denied') blocker = isIOS() ? 'Notifications are blocked for this app. On iPhone: Settings → Notifications → Tutorise HQ → Allow Notifications.' : 'Notifications are blocked for this site in your browser’s settings. Allow them for this address, then reload.';
     const b = cfg.badge || {};
@@ -1213,6 +1213,15 @@ function renderSettings(el) {
       </div>
       <h4 style="margin:0 0 8px">Notify me about</h4>
       ${Object.entries(labels).map(([k, l]) => `<label class="check"><input type="checkbox" data-pref="${k}" ${cfg.prefs[k] ? 'checked' : ''}> ${l}</label>`).join('')}
+      <h4 style="margin:18px 0 6px">What the dashboard can see</h4>
+      <div class="notif-diag">${(() => {
+        const d = cfg.diag || {}, st = (x) => ({ live: ['good', 'Live'], demo: ['demo', 'Demo data: no alerts'], error: ['critical', 'Error'], off: ['neutral', 'Not set up'] }[x?.state] || ['neutral', 'Not set up']);
+        const [ec, el] = st(d.email), [sc, sl] = st(d.stats);
+        return `<div><span>Email (for new-email alerts)</span><span class="status ${ec}" title="${esc(d.email?.message || '')}">${el}</span><span class="muted">${d.email?.state === 'live' ? `${d.unread ?? 0} unread · checked ${d.emailCheckedAt ? ago(d.emailCheckedAt) : '—'}` : d.email?.state === 'error' ? esc(d.email.message || '') : 'Set up in Settings → Email on this copy of the dashboard'}</span></div>
+          <div><span>Business data (for subscriber alerts)</span><span class="status ${sc}" title="${esc(d.stats?.message || '')}">${sl}</span><span class="muted">${d.stats?.state === 'error' ? esc(d.stats.message || '') : ''}</span></div>`;
+      })()}</div>
+      <h4 style="margin:18px 0 6px">Recent alerts</h4>
+      ${(cfg.log || []).length ? `<div class="notif-log">${cfg.log.slice(0, 12).map((l) => `<div><span class="time">${new Date(l.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span><b>${esc(l.title || l.type || '')}</b><span class="${l.skipped || (l.results || []).some((r) => !r.ok) || (!l.results && l.note) ? 'error-msg' : 'ok-msg'}">${esc(l.note || (l.results || []).map((r) => `${r.label}: ${r.ok ? 'sent ✓' : `failed ${r.status || ''} ${r.error || ''}`}`).join(' · '))}</span></div>`).join('')}</div>` : '<p class="muted" style="font-size:12.5px">No alerts yet.</p>'}
       <h4 style="margin:18px 0 6px">Devices</h4>
       ${cfg.devices.length ? cfg.devices.map((d) => `<div class="passkey-row"><div style="flex:1"><b>${esc(d.label)}</b>${sub && d.endpoint === sub.endpoint ? ' <span class="muted">(this device)</span>' : ''}<div class="muted" style="font-size:12.5px">Added ${new Date(d.createdAt).toLocaleDateString('en-GB')}${d.lastOk ? ` · last delivered ${new Date(d.lastOk).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}${d.lastError ? ` · <span class="error-msg">${esc(d.lastError)}</span>` : ''}</div></div><button class="btn sm danger" data-rm="${esc(d.endpoint)}">Remove</button></div>`).join('') : '<p class="muted">No devices yet.</p>'}`;
     const msg = $('#n-msg', body);
@@ -1235,8 +1244,8 @@ function renderSettings(el) {
     });
     $('#n-test', body).onclick = async () => {
       msg.className = 'form-msg muted'; msg.textContent = 'Sending…';
-      try { const r = await api('/api/push/test', { body: {} }); msg.className = 'form-msg ok-msg'; msg.textContent = `✓ Sent to ${r.sent} device${r.sent === 1 ? '' : 's'}`; }
-      catch (e) { msg.className = 'form-msg error-msg'; msg.textContent = '✕ ' + e.message; }
+      try { const r = await api('/api/push/test', { body: {} }); msg.className = 'form-msg ok-msg'; msg.textContent = `✓ Handed to Apple/Google for ${r.sent} device${r.sent === 1 ? '' : 's'}. It should arrive within a few seconds.`; setTimeout(() => drawNotifications(body), 1500); }
+      catch (e) { msg.className = 'form-msg error-msg'; msg.textContent = '✕ ' + e.message; setTimeout(() => drawNotifications(body), 1500); }
     };
     $$('[data-pref]', body).forEach((c) => (c.onchange = async () => { await api('/api/push/prefs', { method: 'PUT', body: { [c.dataset.pref]: c.checked } }).catch((e) => toast(e.message)); }));
     $$('[data-rm]', body).forEach((x) => (x.onclick = async () => { await api('/api/push/unsubscribe', { body: { endpoint: x.dataset.rm } }); drawNotifications(body); }));
